@@ -7,6 +7,7 @@ Date filters accept either `YYYY-MM` or `YYYY-MM-DD` everywhere."""
 import csv
 import re
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 
 from extension_desk.districts import DISTRICTS
@@ -38,19 +39,25 @@ def _read(path: Path) -> list[dict]:
 
 
 def _check_date(value: str) -> str:
-    if value and not _DATE.match(value):
-        raise ValueError(f"expected YYYY-MM or YYYY-MM-DD, got {value!r}")
+    """Validate a filter bound up front, so a bad input raises instead of
+    looking like missing data."""
+    if not value:
+        return value
+    try:
+        if not _DATE.match(value):
+            raise ValueError
+        date.fromisoformat(value if len(value) == 10 else value + "-01")
+    except ValueError:
+        raise ValueError(f"expected a real YYYY-MM or YYYY-MM-DD date, got {value!r}") from None
     return value
 
 
 def _on_or_after(value: str, since: str) -> bool:
     """`value` (a month or a date) is on or after `since` (a month or a date)."""
-    since = _check_date(since)
     return value[:len(since)] >= since[:len(value)]
 
 
 def _on_or_before(value: str, end: str) -> bool:
-    end = _check_date(end)
     return value[:len(end)] <= end[:len(value)]
 
 
@@ -94,12 +101,16 @@ class DataStore:
     def rainfall(self, district: str, start: str = "", end: str = "") -> list[dict]:
         """Dekads starting within [start, end]; either bound may be a month."""
         d = self._district(district)
+        start, end = _check_date(start), _check_date(end)
+        if start and end and start[:len(end)] > end[:len(start)]:
+            raise ValueError(f"start {start!r} is after end {end!r}")
         return self._select("rainfall", lambda r: r["district"] == d
                             and _on_or_after(r["dekad_start"], start)
                             and (not end or _on_or_before(r["dekad_start"], end)))
 
     def prices(self, district: str, commodity: str | None = None, since: str = "") -> list[dict]:
         d = self._district(district)
+        since = _check_date(since)
         return self._select("prices", lambda r: r["district"] == d
                             and (commodity is None or r["commodity"].lower() == commodity.lower())
                             and _on_or_after(r["month"], since))
@@ -119,5 +130,6 @@ class DataStore:
 
     def pest_alerts(self, district: str, since: str = "") -> list[dict]:
         d = self._district(district)
+        since = _check_date(since)
         return self._select("pest_alerts", lambda r: r["district"] == d
                             and _on_or_after(r["reported_on"], since))

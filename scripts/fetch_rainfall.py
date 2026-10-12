@@ -67,15 +67,24 @@ def main() -> None:
             totals[k] += p
             counts[k] += 1
 
+        def complete(y: int, m: int, dk: int) -> bool:
+            start, stop = dekad_bounds(y, m, dk)
+            return counts[(y, m, dk)] == (stop - start).days + 1
+
+        # Only complete dekads enter the normal; a dekad missing a day would
+        # drag its year's total down and skew the mean.
         normals: dict[tuple[int, int], list[float]] = defaultdict(list)
         for (y, m, dk), total in totals.items():
-            if CLIMATOLOGY[0] <= y <= CLIMATOLOGY[1]:
+            if CLIMATOLOGY[0] <= y <= CLIMATOLOGY[1] and complete(y, m, dk):
                 normals[(m, dk)].append(total)
+        years = CLIMATOLOGY[1] - CLIMATOLOGY[0] + 1
+        short = {k: len(v) for k, v in normals.items() if len(v) < years}
+        if short:
+            print(f"warning: {key} normals with fewer than {years} complete years: {short}")
 
         for (y, m, dk), total in sorted(totals.items()):
             start, stop = dekad_bounds(y, m, dk)
-            complete = counts[(y, m, dk)] == (stop - start).days + 1
-            if start < KEEP_FROM or not complete:
+            if start < KEEP_FROM or not complete(y, m, dk):
                 continue
             total = round(total, 1)
             normal = round(statistics.mean(normals[(m, dk)]), 1)
@@ -89,6 +98,7 @@ def main() -> None:
                 "normal_mm": normal,
                 "departure_mm": round(total - normal, 1),
                 "anomaly_pct": "" if anomaly is None else anomaly,
+                "normal_years": len(normals[(m, dk)]),
                 "source": "Open-Meteo archive (CC BY 4.0), ERA5 reanalysis; normal = 1991-2020 mean",
             })
 

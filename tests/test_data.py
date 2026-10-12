@@ -89,8 +89,24 @@ def test_date_filters_accept_month_or_day_in_every_table(store):
     by_month = store.rainfall("chiredzi", start="2026-01", end="2026-01")
     by_day = store.rainfall("chiredzi", start="2026-01-01", end="2026-01-31")
     assert by_month == by_day and len(by_month) == 3
+
+
+
+@pytest.mark.parametrize("call", [
+    lambda s: s.rainfall("chiredzi", start="2026-13-99"),
+    lambda s: s.rainfall("chiredzi", end="2026-02-30"),
+    lambda s: s.rainfall("chiredzi", start="2026-03", end="2026-01"),
+    # No sorghum rows exist: a bad date must still raise, not return [].
+    lambda s: s.prices("chiredzi", commodity="sorghum", since="May 2026"),
+    lambda s: s.pest_alerts("chiredzi", since="2026-1-5"),
+])
+def test_bad_date_input_raises_even_when_no_rows_match(store, call):
     with pytest.raises(ValueError):
-        store.prices("chiredzi", since="May 2026")
+        call(store)
+
+
+def test_rainfall_normals_use_all_thirty_years(store):
+    assert {r["normal_years"] for r in store.tables["rainfall"]} == {"30"}
 
 
 def test_unknown_district_raises_instead_of_returning_nothing(store):
