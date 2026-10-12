@@ -126,13 +126,18 @@ def get_pest_alerts(store: DataStore, district: str, since: str = "") -> dict:
 
 def check_citations(store: DataStore, household_id: str, citations: list[str]) -> None:
     """Every citation must be a record that exists and is about this
-    household: the household itself, one of its plots, or a rainfall, price
-    or pest record for its district. This proves each citation is relevant
-    to the household; it can't prove the record supports the claim. That is
-    the officer's call at the approval gate."""
+    household: the household itself, one of its plots, a rainfall or price
+    record for its district, or a pest alert for its district on a crop the
+    household grows. This proves each citation is relevant to the household;
+    it can't prove the record supports the claim. That is the officer's call
+    at the approval gate.
+
+    Prices stay district-wide on purpose: another crop's price can matter
+    (a sorghum grower buys maize meal)."""
     if not citations:
         raise CitationError("at least one citation is required")
     district = store.household(household_id)["district"]
+    crops = {p["crop"] for p in store.plots(household_id)}
     bad = []
     for rid in citations:
         try:
@@ -147,6 +152,10 @@ def check_citations(store: DataStore, household_id: str, citations: list[str]) -
             ok = record["household_id"] == household_id
         elif prefix in ("rain", "price", "pest"):
             ok = record["district"] == district
+            if ok and prefix == "pest" and not crops & set(record["crops_affected"].split(";")):
+                bad.append(f"{rid}: affects {record['crops_affected'].replace(';', ', ')}, which "
+                           f"{household_id} doesn't grow ({', '.join(sorted(crops)) or 'no plots'})")
+                continue
         else:
             ok = False
         if not ok:

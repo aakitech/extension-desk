@@ -278,3 +278,16 @@ def test_server_runs_standalone_over_stdio(tmp_path):
     assert names == TOOLS
     assert not result.isError
     assert json.loads(result.content[0].text)["citations"][0].startswith("rain:chiredzi:")
+
+
+def test_pest_alert_must_affect_a_crop_the_household_grows(store, queue):
+    # Seen in the first real-model run: sorghum pest advice for hh:018, which
+    # grows cowpeas and groundnuts. The alert is real and in the right district.
+    assert not {p["crop"] for p in store.plots("hh:018")} & {"sorghum", "maize"}
+    with pytest.raises(CitationError, match="affects sorghum, which hh:018 doesn't grow"):
+        tools.draft_advisory(store, queue, "hh:018", [rec("Scout for fall armyworm", "pest:chiredzi:001")])
+    with pytest.raises(CitationError, match="doesn't grow"):
+        tools.flag_for_followup(store, queue, "hh:018", "Armyworm risk", ["pest:chiredzi:001"])
+    assert queue.items() == []
+    # The same alert is fine for a sorghum grower.
+    assert tools.draft_advisory(store, queue, "hh:003", [rec("Scout for fall armyworm", "pest:chiredzi:001")])
