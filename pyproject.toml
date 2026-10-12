@@ -11,6 +11,9 @@ dependencies = [
     "langchain-mcp-adapters",
 ]
 
+[project.scripts]
+extension-desk-mcp = "extension_desk.mcp_server.server:main"
+
 [dependency-groups]
 dev = ["pytest"]
 

@@ -59,6 +59,7 @@ If `uv` isn't on PATH, use `python -m uv`.
 - `scripts/`: regenerate the data (`fetch_*`, `generate_synthetic.py`)
 - `src/extension_desk/data.py`: `DataStore`, read-only lookups. Everything else reads data through it
 - `src/extension_desk/mcp_server/`: our MCP server and its tools
+- `src/extension_desk/review_queue.py`: the officer review queue the acting tools write to (SQLite in `state/`, never committed)
 - `src/extension_desk/agent/`: LangGraph orchestration, approval gate, audit log
 - `evals/`: eval tasks and harness feeding `EVALS.md`
 
