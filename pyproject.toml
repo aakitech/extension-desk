@@ -10,10 +10,18 @@ dependencies = [
     "langgraph",
     "langchain-mcp-adapters",
     "pydantic>=2",
+    "langchain-ollama>=1.1.0",
+    "mcp-server-time==2026.8.18",
 ]
 
 [project.scripts]
+extension-desk = "extension_desk.agent.cli:main"
 extension-desk-mcp = "extension_desk.mcp_server.server:main"
+
+[project.optional-dependencies]
+hosted = [
+    "langchain-anthropic>=1.7.5",
+]
 
 [dependency-groups]
 dev = ["pytest"]
