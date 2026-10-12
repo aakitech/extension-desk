@@ -36,11 +36,18 @@ def get_rainfall(store: DataStore, district: str, start: str = "", end: str = ""
     rows = store.rainfall(district, start=start, end=end)
     if not start and not end:
         rows = rows[-DEFAULT_DEKADS:]
+    if not rows:
+        # No records is not the same as zero rain: say so, don't sum to 0.
+        return {"district": district.strip().lower(), "period": None, "total_mm": None,
+                "normal_mm": None, "departure_mm": None, "anomaly_pct": None,
+                "includes_preliminary": False, "dekads": [], "citations": [],
+                "note": "No rainfall records for this period; the latest dekad is "
+                        + store.rainfall(district)[-1]["dekad_start"]}
     total = round(sum(float(r["rain_mm"]) for r in rows), 1)
     normal = round(sum(float(r["normal_mm"]) for r in rows), 1)
     return {
         "district": district.strip().lower(),
-        "period": {"start": rows[0]["dekad_start"], "end": rows[-1]["dekad_end"]} if rows else None,
+        "period": {"start": rows[0]["dekad_start"], "end": rows[-1]["dekad_end"]},
         "total_mm": total,
         "normal_mm": normal,
         "departure_mm": round(total - normal, 1),

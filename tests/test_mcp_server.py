@@ -56,6 +56,12 @@ def test_rainfall_dry_season_has_no_percentage(store):
     assert len(out["citations"]) == 3 and out["includes_preliminary"] is False
 
 
+def test_rainfall_with_no_records_is_null_not_zero(store):
+    out = tools.get_rainfall(store, "chiredzi", start="2026-10")
+    assert out["citations"] == [] and out["total_mm"] is None and out["departure_mm"] is None
+    assert "latest dekad is 2026-09-21" in out["note"]
+
+
 def test_prices_match_crop_by_name_and_cite_every_point(store):
     out = tools.get_prices(store, "chiredzi", crop="maize")
     assert {s["commodity"] for s in out["series"]} == {"Maize", "Maize meal", "Maize grain (white)"}
@@ -178,6 +184,23 @@ def test_schedule_followup_rejects_bad_dates(store, queue, visit_date, message):
     with pytest.raises(ValueError, match=message):
         tools.schedule_followup(store, queue, "hh:001", visit_date, "Check seedlings",
                                 ["hh:001"], today=TODAY)
+    assert queue.items() == []
+
+
+BAD_CITATIONS = [
+    (["rain:mangwe:2026-09-d3"], "not about"),
+    (["plot:002-1"], "not about"),
+    (["unknown:record"], "no such record"),
+]
+
+
+@pytest.mark.parametrize("citations, message", BAD_CITATIONS)
+def test_flag_and_visit_reject_bad_citations_and_write_nothing(store, queue, citations, message):
+    with pytest.raises(CitationError, match=message):
+        tools.flag_for_followup(store, queue, "hh:001", "Missed last visit", citations)
+    with pytest.raises(CitationError, match=message):
+        tools.schedule_followup(store, queue, "hh:001", "2026-10-20", "Check seedlings",
+                                citations, today=TODAY)
     assert queue.items() == []
 
 
