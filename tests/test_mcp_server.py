@@ -62,6 +62,14 @@ def test_rainfall_with_no_records_is_null_not_zero(store):
     assert "latest dekad is 2026-09-21" in out["note"]
 
 
+def test_rainfall_for_a_district_with_no_records_at_all():
+    # Found by the eval harness's missing-data fixture: this raised IndexError.
+    empty = DataStore({**DataStore.load().tables, "rainfall": []})
+    out = tools.get_rainfall(empty, "chiredzi")
+    assert out["total_mm"] is None and out["citations"] == []
+    assert out["note"] == "No rainfall records at all for chiredzi"
+
+
 def test_prices_match_crop_by_name_and_cite_every_point(store):
     out = tools.get_prices(store, "chiredzi", crop="maize")
     assert {s["commodity"] for s in out["series"]} == {"Maize", "Maize meal", "Maize grain (white)"}
