@@ -10,6 +10,7 @@ import asyncio
 import json
 import os
 import sys
+import uuid
 from datetime import date
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -95,7 +96,8 @@ def ask_officer(payload: dict, officer: str) -> dict:
 
 
 async def run_household(app, household_id: str, answer) -> dict:
-    config = {"configurable": {"thread_id": household_id}}
+    # A new thread per run: nothing from an earlier run of this household carries over.
+    config = {"configurable": {"thread_id": f"{household_id}:{uuid.uuid4()}"}}
     result = await app.ainvoke({"household_id": household_id}, config)
     while result.get("__interrupt__"):
         result = await app.ainvoke(Command(resume=answer(result["__interrupt__"][0].value)), config)

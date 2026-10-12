@@ -153,6 +153,10 @@ def citation_problems(recs: list[dict], seen: list[str]) -> list[str]:
     return problems
 
 
+def _can_retry(state: State) -> bool:
+    return state.get("attempts", 0) < MAX_ATTEMPTS and state.get("turns", 0) < MAX_TURNS
+
+
 def build_graph(model, tools: list[BaseTool], store: DataStore, queue: ReviewQueue, audit: AuditLog,
                 checkpointer=None):
     by_name = {t.name: t for t in tools}
@@ -162,6 +166,10 @@ def build_graph(model, tools: list[BaseTool], store: DataStore, queue: ReviewQue
     llm = model.bind_tools([by_name[n] for n in READ_TOOLS] + [SUBMIT, NO_ADVICE])
 
     async def clock(state: State) -> dict:
+        if state.get("messages") or state.get("seen") or state.get("item"):
+            # Evidence, counters and queue items from an earlier run on this
+            # thread would leak into this one. Each run needs its own thread.
+            raise RuntimeError("this thread already holds a run; start each run on a new thread_id")
         result = _json(await by_name["get_current_time"].ainvoke({"timezone": TIMEZONE}))
         if not result or "datetime" not in result:
             raise RuntimeError("time server returned no datetime")
@@ -221,7 +229,7 @@ def build_graph(model, tools: list[BaseTool], store: DataStore, queue: ReviewQue
 
     def after_check(state: State) -> str:
         if isinstance(state["messages"][-1], ToolMessage) and state["messages"][-1].status == "error":
-            return "agent" if state.get("attempts", 0) < MAX_ATTEMPTS else "drop"
+            return "agent" if _can_retry(state) else "drop"
         return "queue_draft"
 
     async def queue_draft(state: State) -> dict:
@@ -230,14 +238,14 @@ def build_graph(model, tools: list[BaseTool], store: DataStore, queue: ReviewQue
         item = _json(msg)
         if not item or "item_id" not in item:
             # The server's own check refused it (e.g. a cited record isn't about this household).
-            return {"attempts": 1, "messages": [HumanMessage(
+            return {"attempts": 1, "item": None, "messages": [HumanMessage(
                 f"The review queue refused the draft: {_text(msg)}\nFix it, or call no_advice.")]}
         return {"item": item}
 
     def after_queue(state: State) -> str:
         if state.get("item"):
             return "officer_gate"
-        return "agent" if state.get("attempts", 0) < MAX_ATTEMPTS else "drop"
+        return "agent" if _can_retry(state) else "drop"
 
     def officer_gate(state: State) -> dict:
         item = state["item"]

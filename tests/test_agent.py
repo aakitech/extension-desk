@@ -431,3 +431,52 @@ def test_ollama_host_without_a_scheme(monkeypatch):
     finally:
         monkeypatch.delenv("OLLAMA_HOST")
         importlib.reload(models)
+
+
+# --- Codex review -----------------------------------------------------------
+
+def test_a_second_run_of_the_same_household_must_gather_its_own_evidence(env):
+    # Run 1 reads the rainfall and is rejected. Run 2, on the same graph,
+    # submits the same citations without reading anything: it must not pass.
+    app, queue, audit, new_items = env
+    graph, model = app(*GATHER, GOOD,                 # run 1
+                       DISTRICT_ONLY, DISTRICT_ONLY)  # run 2: no evidence gathered
+    answers = iter([{"decision": "reject", "officer": "T. Moyo", "answered_via": "prompt"}])
+    first = asyncio.run(cli.run_household(graph, HH, lambda payload: next(answers)))
+    second = asyncio.run(cli.run_household(graph, HH, lambda payload: pytest.fail("reached the gate")))
+    assert first["status"] == "rejected"
+    assert second["status"] == "dropped" and "no tool returned in this run" in second["reason"]
+    assert len(new_items()) == 1
+
+
+def test_graph_refuses_to_reuse_a_thread(env):
+    app, *_ = env
+    graph, _ = app(*GATHER, GOOD)
+    config = {"configurable": {"thread_id": "same"}}
+
+    async def go():
+        await graph.ainvoke({"household_id": HH}, config)  # pauses at the gate
+        await graph.ainvoke({"household_id": HH}, config)
+
+    with pytest.raises(RuntimeError, match="new thread_id"):
+        asyncio.run(go())
+
+
+def test_turn_limit_holds_when_the_last_turn_is_a_failed_draft(env):
+    # Turn 1 gathers, turns 2-9 are prose, turn 10 is an invalid draft: no turn 11.
+    app, queue, audit, new_items = env
+    prose = AIMessage("Thinking about it.")
+    graph, model = app(GATHER[1], *[prose] * 8, submit(("Plant now.", ["hh:001"])), GOOD)
+    result, pauses = run(graph)
+    assert model.calls == MAX_TURNS and pauses == []
+    assert result["outcome"]["status"] == "dropped" and new_items() == []
+
+
+def test_turn_limit_holds_when_the_server_refuses_on_the_last_turn(env):
+    app, queue, audit, new_items = env
+    prose = AIMessage("Thinking about it.")
+    graph, model = app(call("get_plot_records", {"district": "chiredzi"}), *[prose] * 8,
+                       submit(("Rotate with groundnuts.", ["plot:002-1"])), GOOD)
+    result, pauses = run(graph)
+    assert model.calls == MAX_TURNS and pauses == []
+    assert result["outcome"]["status"] == "dropped" and new_items() == []
