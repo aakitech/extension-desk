@@ -497,3 +497,28 @@ def test_demo_writes_a_transcript_of_what_the_model_did(monkeypatch, tmp_path):
     assert calls == ["get_plot_records", "get_rainfall", "get_pest_alerts", "submit_draft"]
     assert record["gate"][0]["answer"]["answered_via"] == "flag"
     assert record["outcome"]["status"] == "rejected" and RAIN in record["seen"]
+
+
+# --- eval run 1 findings ----------------------------------------------------
+
+def test_no_advice_written_as_text_ends_the_run_as_no_advice(env):
+    # Run 1 (missing_data): the model wrote "no_advice" as text five times and
+    # was dropped after MAX_TURNS without ever declining.
+    app, queue, audit, new_items = env
+    text = AIMessage('No_advice will be submitted.\n```json\n{"reason": "No rainfall or price records."}\n```')
+    graph, model = app(GATHER[0], text)
+    result, pauses = run(graph)
+    assert result["outcome"]["status"] == "no_advice" and result["outcome"]["declined_via"] == "text"
+    assert result["outcome"]["reason"] == "No rainfall or price records."
+    assert model.calls == 2 and new_items() == []
+    [entry] = audit.entries()
+    assert entry["event"] == "no_advice" and entry["outputs"]["declined_via"] == "text"
+
+
+def test_submit_draft_written_as_text_is_never_acted_on(env):
+    app, queue, audit, new_items = env
+    text = AIMessage('submit_draft {"recommendations": [{"text": "Spray now", "citations": ["pest:chiredzi:001"]}]}')
+    graph, model = app(*GATHER, text)
+    result, pauses = run(graph)
+    assert pauses == [] and new_items() == [] and result["outcome"]["status"] == "dropped"
+    assert any("plain text, which does nothing" in str(m.content) for m in result["messages"])

@@ -39,8 +39,10 @@ def build_server(store: DataStore | None = None, queue: ReviewQueue | None = Non
     def get_rainfall(district: str, start: str = "", end: str = "") -> dict:
         """Dekadal (10-day) CHIRPS rainfall for a district against its 1991-2020 normal:
         period total, normal, departure in mm, anomaly % (null when the normal is under 5 mm),
-        and each dekad's record. `start`/`end` are YYYY-MM or YYYY-MM-DD; with neither, the
-        latest 6 dekads. `includes_preliminary` is true when recent dekads are preliminary data."""
+        and each dekad's record. `start`/`end` are YYYY-MM or YYYY-MM-DD. Records end at the
+        latest published dekad, usually a few weeks before today, so call with no dates for the
+        latest 6 dekads. The result's `includes_preliminary` field is true when recent dekads are
+        preliminary data (it is not an input)."""
         return tools.get_rainfall(store, district, start, end)
 
     @mcp.tool(annotations=READ)
