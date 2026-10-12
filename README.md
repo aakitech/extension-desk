@@ -28,6 +28,15 @@ Before you run it:
 
 Options: `--district mangwe`, `--limit N`, `--officer NAME`, `--decide approve|reject` (non-interactive), `--model anthropic:<model>` (hosted; run `uv sync --extra hosted` and set `ANTHROPIC_API_KEY`).
 
+## Evals
+
+```bash
+uv run extension-desk eval                 # 11 tasks on the configured model, about 15 minutes on a laptop GPU
+uv run extension-desk eval --update-evals  # also rewrite the results table in EVALS.md
+```
+
+Each task runs the real agent and MCP servers, often on a modified copy of the data (a drought, missing records, a hostile data field), and checks the outcome automatically. Results and transcripts go to `evals/results/`. See [EVALS.md](EVALS.md) for the latest run and the known failures.
+
 ## Data
 
 See [data/README.md](data/README.md) for every source, what it covers, and what it doesn't. No real household records are used. Household and plot data is synthetic.
