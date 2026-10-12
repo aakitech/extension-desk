@@ -38,8 +38,8 @@ Judging (100 points): agentic depth & MCP craft 30 · open-source rigour 20 · f
 
 | Person | GitHub | Focus |
 |---|---|---|
-| Brighton | @dev-thandabantu | Lead; data layer, agent |
-| Munashe | @dev-munashe | MCP server, open-weights run, reviews |
+| Brighton | @dev-thandabantu | Lead; data layer, MCP server, agent |
+| Munashe | @dev-munashe | Open-weights run, reviews |
 | Law | @law001-mugah | Submission, demo, live-review prep |
 
 ## Stack and commands
