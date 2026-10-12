@@ -33,10 +33,14 @@ def test_fixtures_change_only_what_they_say(tmp_path):
     d = fixtures.make(tmp_path / "drought", fixtures.drought("chiredzi", ("2026-09",)))
     rows = _csv(d / "rainfall.csv")
     hit = [r for r in rows if r["district"] == "chiredzi" and r["dekad_start"].startswith("2026-09")]
-    assert len(hit) == 3 and all(r["rain_mm"] == "0.0" and "eval fixture" in r["source"] for r in hit)
+    assert len(hit) == 3 and all(r["rain_mm"] == "0.0" for r in hit)
     assert float(hit[-1]["departure_mm"]) == -float(hit[-1]["normal_mm"])
-    untouched = [r for r in rows if r not in hit]
-    assert all("eval fixture" not in r["source"] for r in untouched)
+    # The model reads `source`, so it must not say "drought"; fixture.json records the change.
+    real = {r["record_id"]: r for r in _csv(fixtures.DATA_DIR / "rainfall.csv")}
+    assert all(r["source"] == real[r["record_id"]]["source"] for r in rows)
+    assert [r for r in rows if r not in hit] == [r for rid, r in real.items() if rid not in {h["record_id"] for h in hit}]
+    meta = json.loads((d / "fixture.json").read_text(encoding="utf-8"))
+    assert meta["change"].startswith("drought") and meta["records"] == [r["record_id"] for r in hit]
 
     d = fixtures.make(tmp_path / "missing", fixtures.remove("chiredzi", ("rainfall", "prices")))
     store = DataStore.load(d)
@@ -61,6 +65,21 @@ def _run(recs=(), outcome="rejected", outputs=()):
     items = [{"payload": {"recommendations": list(recs)}, "status": "rejected"}] if recs else []
     msgs = [ToolMessage(json.dumps(o), tool_call_id=str(i)) for i, o in enumerate(outputs)]
     return Run("hh:018", {"status": outcome}, {"messages": msgs}, items, [], DataStore.load())
+
+
+def test_numbers_check_reads_negative_figures():
+    recs = [{"text": "Rain was -13.1 mm below normal, an anomaly of -55%.", "citations": ["rain:chiredzi:2026-09-d3"]}]
+    ok, detail = check_numbers(_run(recs, outputs=[{"departure_mm": -13.1}]))
+    assert not ok and "55" in detail  # -13.1 matches; -55 doesn't
+    assert check_numbers(_run(recs, outputs=[{"departure_mm": -13.1, "anomaly_pct": -55}]))[0]
+
+
+def test_dropped_is_not_a_pass_where_the_task_is_to_say_something():
+    from extension_desk.evals.tasks import check_unknown
+    assert not check_unknown(_run(outcome="dropped"))[0]
+    assert check_unknown(_run(outcome="no_advice"))[0]
+    assert not check_false_start(_run(outcome="dropped"))[0]
+    assert check_false_start(_run(outcome="no_advice"))[0]
 
 
 def test_numbers_check_catches_a_figure_no_tool_returned():
@@ -88,18 +107,24 @@ def test_missing_data_check_fails_a_confident_draft():
     assert not check_missing(_run(outcome="dropped"))[0]  # run 1 wrongly passed this
 
 
-def test_eval_command_writes_results_and_the_evals_table(tmp_path, monkeypatch):
+def test_eval_command_writes_results_but_a_partial_run_leaves_the_table(tmp_path, monkeypatch):
     evals_md = tmp_path / "EVALS.md"
-    evals_md.write_text(f"# Evals\n\n{harness.START}\nNot run yet.\n{harness.END}\n\nKept.\n", encoding="utf-8")
+    before = f"# Evals\n\n{harness.START}\nNot run yet.\n{harness.END}\n\nKept.\n"
+    evals_md.write_text(before, encoding="utf-8")
     monkeypatch.setattr(harness, "EVALS_MD", evals_md)
-    monkeypatch.setattr(harness, "model_details", lambda spec=None: {"provider": "scripted"})
+    # Only a full run on a real model may replace the table.
     assert main(["eval", "--task", "unsourced_blocked", "--results-dir", str(tmp_path / "r"),
-                 "--update-evals"]) == 0
+                 "--update-evals"]) == 2
+    assert evals_md.read_text(encoding="utf-8") == before
     [run_dir] = (tmp_path / "r").iterdir()
     results = json.loads((run_dir / "results.json").read_text(encoding="utf-8"))
+    assert results["meta"]["model"] == "none (scripted tasks only)" and results["meta"]["model_details"] == {}
+    assert str(tmp_path) not in json.dumps(results["meta"]["command"])  # no local paths
     [r] = results["tasks"]
     assert r["task"] == "unsourced_blocked" and r["passed"] and r["outcome"] == "dropped"
     assert (run_dir / "unsourced_blocked" / "hh_004.json").exists()
+    # The table itself, from those results.
+    harness.update_evals(results)
     text = evals_md.read_text(encoding="utf-8")
     assert "| 1 | `unsourced_blocked` |" in text and "PASS" in text and "Kept." in text
     assert "Not run yet." not in text

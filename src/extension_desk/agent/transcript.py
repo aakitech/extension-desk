@@ -38,8 +38,9 @@ def _commit() -> str | None:
 
 
 def command() -> list[str]:
-    """argv with the program reduced to its name: no local paths in committed records."""
-    return [Path(sys.argv[0]).name, *sys.argv[1:]]
+    """argv with the program and any absolute path reduced to a name: no
+    local paths in committed records."""
+    return [Path(a).name if Path(a).is_absolute() else a for a in [sys.argv[0], *sys.argv[1:]]]
 
 
 class Transcript:

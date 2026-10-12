@@ -86,10 +86,19 @@ NO_ADVICE = _control_tool("no_advice", NoAdvice,
 DECLINE_IN_TEXT = re.compile(r"\bno_advice\b", re.I)
 
 
-def _reason_from_text(text: str) -> str:
-    """The reason from a no_advice written as text: a JSON "reason" if there is one, else the text."""
+def _declines_in_text(text: str) -> bool:
+    """The model wrote no_advice instead of calling it. Not when it also talks
+    about submit_draft: "I'll submit rather than no_advice" is not a decline."""
+    return bool(DECLINE_IN_TEXT.search(text)) and "submit_draft" not in text.lower()
+
+
+def _reason_from_text(text: str, earlier: list[str] = ()) -> str:
+    """A JSON "reason" if there is one, else the text. If the text is just the
+    word no_advice, the model's last real explanation is the reason."""
     match = re.search(r'"reason"\s*:\s*"([^"]+)"', text)
     reason = match.group(1) if match else re.sub(r"\s+", " ", text)
+    if DECLINE_IN_TEXT.fullmatch(reason.strip(" .`")):
+        reason = next((re.sub(r"\s+", " ", t) for t in reversed(earlier) if len(t.strip()) > 40), reason)
     return reason.strip()[:500] or "no reason given"
 
 
@@ -109,8 +118,8 @@ class State(TypedDict, total=False):
     outcome: dict
 
 
-def _text(msg: ToolMessage | list | str) -> str:
-    content = msg.content if isinstance(msg, ToolMessage) else msg
+def _text(msg) -> str:
+    content = getattr(msg, "content", msg)
     if isinstance(content, list):
         return "".join(c.get("text", "") if isinstance(c, dict) else str(c) for c in content)
     return str(content)
@@ -209,7 +218,7 @@ def build_graph(model, tools: list[BaseTool], store: DataStore, queue: ReviewQue
             return "check"
         if names == ["no_advice"]:
             return "no_advice"
-        if not names and DECLINE_IN_TEXT.search(_text(last.content)):
+        if not names and _declines_in_text(_text(last)):
             # Small models sometimes write "no_advice" instead of calling it.
             # Declining is always safe, so text may end the run that way.
             # Text is never turned into submit_draft or any other action.
@@ -310,7 +319,9 @@ def build_graph(model, tools: list[BaseTool], store: DataStore, queue: ReviewQue
             reply = [ToolMessage("Recorded: no advice.", tool_call_id=call["id"])]
         else:
             via, reply = "text", []
-            reason = _reason_from_text(_text(last.content))
+            prose = [_text(m) for m in state["messages"][:-1]
+                     if getattr(m, "type", "") == "ai" and not getattr(m, "tool_calls", None)]
+            reason = _reason_from_text(_text(last), prose)
         audit.append("no_advice", household_id=state["household_id"], inputs={"seen": state.get("seen", [])},
                      outputs={"reason": reason, "declined_via": via})
         return {"outcome": {"status": "no_advice", "reason": reason, "declined_via": via, "delivered": False},

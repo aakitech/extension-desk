@@ -69,7 +69,8 @@ async def run_task(task: Task, model, out: Path) -> dict:
     tools = await MultiServerMCPClient(cli.mcp_connections(queue, data_dir)).get_tools()
     app = build_graph(model if task.model == "real" else _scripted(task.script), tools, store, queue, audit,
                       checkpointer=InMemorySaver())
-    transcript = Transcript(out, name=task.name, task=task.name, covers=task.covers, fixture=bool(task.fixture),
+    fixture = json.loads((data_dir / "fixture.json").read_text(encoding="utf-8"))
+    transcript = Transcript(out, name=task.name, task=task.name, covers=task.covers, fixture=fixture,
                             model=task.model)
     started = time.monotonic()
     error = None
@@ -134,7 +135,8 @@ async def run_all(args) -> int:
     out = Path(args.results_dir or RESULTS) / stamp
     out.mkdir(parents=True)
     meta = {"run": stamp, "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            "model": model_spec(args.model), "model_details": model_details(args.model), "commit": _commit(),
+            "model": model_spec(args.model) if model else "none (scripted tasks only)",
+            "model_details": model_details(args.model) if model else {}, "commit": _commit(),
             "command": command()}
     results = {"meta": meta, "tasks": []}
     for task in chosen:
@@ -147,6 +149,9 @@ async def run_all(args) -> int:
     (out / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
     print(f"\n{sum(r['passed'] for r in results['tasks'])}/{len(results['tasks'])} passed. Results: {out}")
     if args.update_evals:
+        if len(chosen) != len(TASKS) or not model:
+            print("Not updating EVALS.md: only a full run on a real model replaces the table.", file=sys.stderr)
+            return 2
         update_evals(results)
         print(f"Updated {EVALS_MD}")
     return 0

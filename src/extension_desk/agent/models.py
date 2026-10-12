@@ -10,9 +10,10 @@ import os
 import urllib.request
 
 DEFAULT_MODEL = "ollama:qwen2.5:7b"
-# Ollama's default context is 4096 tokens and it silently drops the oldest
-# messages beyond that, which is the system prompt first. Eval run 1's longer
-# runs reached ~3k tokens of messages plus the tool schemas sent on every call.
+# Ollama's default context is 4096 tokens; past that it truncates the oldest
+# non-system messages (its prompt builder keeps system messages). Eval runs
+# reach ~3k tokens of messages plus the tool schemas sent on every call, so
+# 4096 is close to the edge.
 NUM_CTX = int(os.environ.get("EXTENSION_DESK_NUM_CTX", "16384"))
 OLLAMA_URL = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 if "://" not in OLLAMA_URL:  # Ollama itself accepts host:port

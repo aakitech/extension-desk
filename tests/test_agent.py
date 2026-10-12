@@ -528,3 +528,29 @@ def test_ollama_model_gets_a_context_window_bigger_than_the_default(monkeypatch)
     from extension_desk.agent import models
     monkeypatch.setattr(models, "_check_ollama", lambda name: None)
     assert models.make_model("ollama:qwen2.5:7b").num_ctx == models.NUM_CTX >= 16384
+
+
+def test_text_that_also_mentions_submit_draft_is_not_a_decline(env):
+    app, queue, audit, new_items = env
+    text = AIMessage("I'll call submit_draft rather than no_advice. 1. Plant now.")
+    graph, model = app(GATHER[0], text, *GATHER[1:], GOOD)
+    result, pauses = run(graph, [{"decision": "reject", "officer": "T. Moyo"}])
+    assert len(pauses) == 1 and result["outcome"]["status"] == "rejected"
+
+
+def test_bare_no_advice_text_takes_the_earlier_explanation_as_its_reason(env):
+    app, queue, audit, new_items = env
+    why = AIMessage("There are no rainfall records, no prices and no pest alerts for this district.")
+    graph, model = app(GATHER[0], why, AIMessage("no_advice"))
+    result, pauses = run(graph)
+    assert result["outcome"]["status"] == "no_advice"
+    assert result["outcome"]["reason"].startswith("There are no rainfall records")
+
+
+def test_drop_reason_is_text_not_a_message_repr(env):
+    app, queue, audit, new_items = env
+    wrong = submit(("Rotate with groundnuts.", ["plot:002-1"]))
+    graph, _ = app(call("get_plot_records", {"district": "chiredzi"}), wrong, wrong)
+    result, _ = run(graph)
+    assert result["outcome"]["reason"].startswith("The review queue refused the draft")
+    assert "additional_kwargs" not in result["outcome"]["reason"]
