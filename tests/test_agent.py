@@ -522,3 +522,9 @@ def test_submit_draft_written_as_text_is_never_acted_on(env):
     result, pauses = run(graph)
     assert pauses == [] and new_items() == [] and result["outcome"]["status"] == "dropped"
     assert any("plain text, which does nothing" in str(m.content) for m in result["messages"])
+
+
+def test_ollama_model_gets_a_context_window_bigger_than_the_default(monkeypatch):
+    from extension_desk.agent import models
+    monkeypatch.setattr(models, "_check_ollama", lambda name: None)
+    assert models.make_model("ollama:qwen2.5:7b").num_ctx == models.NUM_CTX >= 16384
