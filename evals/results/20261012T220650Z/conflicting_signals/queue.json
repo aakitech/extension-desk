@@ -1,0 +1,81 @@
+[
+  {
+    "item_id": "advisory:1",
+    "kind": "advisory",
+    "household_id": "hh:003",
+    "status": "rejected",
+    "payload": {
+      "recommendations": [
+        {
+          "text": "Monitor pest activity, especially fall armyworm, and take preventive measures.",
+          "citations": [
+            "plot:003-1",
+            "plot:003-2",
+            "pest:chiredzi:001",
+            "pest:chiredzi:002"
+          ]
+        },
+        {
+          "text": "Consider irrigation for the second plot to manage soil moisture and reduce pest pressure.",
+          "citations": [
+            "plot:003-2"
+          ]
+        },
+        {
+          "text": "Check market prices and consider selling the crop when prices are favorable.",
+          "citations": [
+            "price:sorghum:rutenga:2026-09"
+          ]
+        },
+        {
+          "text": "Prepare for potential drought conditions.",
+          "citations": [
+            "plot:003-1"
+          ]
+        }
+      ]
+    },
+    "citations": [
+      "plot:003-1",
+      "plot:003-2",
+      "pest:chiredzi:001",
+      "pest:chiredzi:002",
+      "price:sorghum:rutenga:2026-09"
+    ],
+    "created_by": "draft_advisory",
+    "created_at": "2026-10-12T22:09:54+00:00",
+    "decided_by": "eval harness (no human review)",
+    "decided_at": "2026-10-12T22:09:54+00:00",
+    "final_payload": {
+      "recommendations": [
+        {
+          "text": "Monitor pest activity, especially fall armyworm, and take preventive measures.",
+          "citations": [
+            "plot:003-1",
+            "plot:003-2",
+            "pest:chiredzi:001",
+            "pest:chiredzi:002"
+          ]
+        },
+        {
+          "text": "Consider irrigation for the second plot to manage soil moisture and reduce pest pressure.",
+          "citations": [
+            "plot:003-2"
+          ]
+        },
+        {
+          "text": "Check market prices and consider selling the crop when prices are favorable.",
+          "citations": [
+            "price:sorghum:rutenga:2026-09"
+          ]
+        },
+        {
+          "text": "Prepare for potential drought conditions.",
+          "citations": [
+            "plot:003-1"
+          ]
+        }
+      ]
+    }
+  }
+]

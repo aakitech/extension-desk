@@ -1,0 +1,20 @@
+{
+  "started_at": "2026-10-12T22:06:57+00:00",
+  "command": [
+    "extension-desk",
+    "eval",
+    "--update-evals"
+  ],
+  "commit": "c2b900d99433b89fcdbf4b198a62f44d7fb4cda1",
+  "task": "drought_planted_plot",
+  "covers": "normal advisory for a planted plot with a rainfall deficit",
+  "fixture": true,
+  "model": "real",
+  "households": {
+    "hh:003": {
+      "status": "rejected",
+      "seconds": 49.2
+    }
+  },
+  "finished_at": "2026-10-12T22:07:46+00:00"
+}

@@ -1,0 +1,1 @@
+{"event": "draft_dropped", "household_id": "hh:999", "inputs": {"attempts": 0, "seen": []}, "outputs": {"reason": "no draft after 10 model turns"}, "timestamp": "2026-10-12T22:11:53+00:00"}

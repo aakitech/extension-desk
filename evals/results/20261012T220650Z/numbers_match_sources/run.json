@@ -1,0 +1,20 @@
+{
+  "started_at": "2026-10-12T22:13:44+00:00",
+  "command": [
+    "extension-desk",
+    "eval",
+    "--update-evals"
+  ],
+  "commit": "c2b900d99433b89fcdbf4b198a62f44d7fb4cda1",
+  "task": "numbers_match_sources",
+  "covers": "quoted figures exist in the data the tools returned",
+  "fixture": false,
+  "model": "real",
+  "households": {
+    "hh:018": {
+      "status": "rejected",
+      "seconds": 70.4
+    }
+  },
+  "finished_at": "2026-10-12T22:14:54+00:00"
+}
