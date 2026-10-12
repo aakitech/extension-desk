@@ -106,13 +106,41 @@ def _json(msg) -> dict | None:
     return value if isinstance(value, dict) else None
 
 
+def parse_recommendations(raw: Any) -> tuple[list[dict], list[str]]:
+    """Normalise `submit_draft` arguments from a model that may get the shape
+    wrong (small models often send nested arrays as JSON strings). Returns
+    (recommendations, problems); anything malformed is a problem, not a crash."""
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            return [], ["recommendations must be a list of {text, citations} objects, not text"]
+    if not isinstance(raw, list):
+        return [], ["recommendations must be a list of {text, citations} objects"]
+    recs, problems = [], []
+    for i, rec in enumerate(raw, 1):
+        if hasattr(rec, "model_dump"):
+            rec = rec.model_dump()
+        if not isinstance(rec, dict):
+            problems.append(f"recommendation {i} must be an object with text and citations, got {rec!r:.60}")
+            continue
+        text, cites = rec.get("text"), rec.get("citations")
+        if isinstance(cites, str):
+            cites = [cites]
+        if not isinstance(text, str) or not isinstance(cites, list) or not all(isinstance(c, str) for c in cites):
+            problems.append(f"recommendation {i} needs text (a string) and citations (a list of record IDs)")
+            continue
+        recs.append({"text": text, "citations": cites})
+    return recs, problems
+
+
 def citation_problems(recs: list[dict], seen: list[str]) -> list[str]:
     """Why a draft fails the citation check; empty if it passes."""
     if not recs:
         return ["the draft has no recommendations"]
     seen_set, problems = set(seen), []
     for i, rec in enumerate(recs, 1):
-        text, cites = (rec.get("text") or "").strip(), rec.get("citations") or []
+        text, cites = rec["text"].strip(), rec["citations"]
         if not text:
             problems.append(f"recommendation {i} has no text")
         if not cites:
@@ -181,15 +209,15 @@ def build_graph(model, tools: list[BaseTool], store: DataStore, queue: ReviewQue
 
     def check(state: State) -> dict:
         call = state["messages"][-1].tool_calls[0]
-        recs = [r if isinstance(r, dict) else dict(r) for r in call["args"].get("recommendations", [])]
-        problems = citation_problems(recs, state.get("seen", []))
+        recs, problems = parse_recommendations(call["args"].get("recommendations", []))
+        problems = problems or citation_problems(recs, state.get("seen", []))
         if problems:
             return {"attempts": 1, "messages": [ToolMessage(
                 "Draft rejected by the citation check:\n- " + "\n- ".join(problems)
                 + "\nFix it using only record IDs returned by the tools, or call no_advice.",
                 tool_call_id=call["id"], status="error")]}
         return {"draft": recs, "messages": [ToolMessage(
-            "Draft passed the citation check and is queued for officer review.", tool_call_id=call["id"])]}
+            "Draft passed the citation check; submitting it to the review queue.", tool_call_id=call["id"])]}
 
     def after_check(state: State) -> str:
         if isinstance(state["messages"][-1], ToolMessage) and state["messages"][-1].status == "error":
@@ -223,8 +251,11 @@ def build_graph(model, tools: list[BaseTool], store: DataStore, queue: ReviewQue
         while True:
             answer = interrupt({"item": item, "sources": sources, "error": error})
             try:
+                if not isinstance(answer, dict):
+                    raise ValueError("the officer's answer must be a decision object")
                 result = gate.decide(queue, audit, item["item_id"], answer.get("decision", ""),
-                                     answer.get("officer", ""), answer.get("edits"), answer.get("note", ""))
+                                     answer.get("officer", ""), answer.get("edits"), answer.get("note", ""),
+                                     answer.get("answered_via", "unspecified"))
                 break
             except ValueError as e:
                 if "is not pending" in str(e):  # decided elsewhere; nothing more to do here
@@ -240,7 +271,7 @@ def build_graph(model, tools: list[BaseTool], store: DataStore, queue: ReviewQue
 
     def no_advice(state: State) -> dict:
         call = state["messages"][-1].tool_calls[0]
-        reason = (call["args"].get("reason") or "").strip() or "no reason given"
+        reason = str(call["args"].get("reason") or "").strip() or "no reason given"
         audit.append("no_advice", household_id=state["household_id"], inputs={"seen": state.get("seen", [])},
                      outputs={"reason": reason})
         return {"outcome": {"status": "no_advice", "reason": reason, "delivered": False},

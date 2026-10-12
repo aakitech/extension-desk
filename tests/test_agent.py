@@ -19,7 +19,12 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
-from extension_desk.agent import gate
+import json
+import sqlite3
+
+from langchain_core.tools import StructuredTool
+
+from extension_desk.agent import cli, gate
 from extension_desk.agent.audit import AuditLog
 from extension_desk.agent.cli import backlog, mcp_connections
 from extension_desk.agent.graph import MAX_TURNS, build_graph, citation_problems
@@ -139,7 +144,9 @@ def test_approved_draft_is_logged_with_inputs_outputs_time_and_officer(env):
     assert entry["outputs"] == {"final_payload": item["payload"], "delivered": False}
 
 
-def test_today_comes_from_the_time_server(env):
+def test_real_time_server_gives_harare_date(env):
+    # The real server's date matches Harare. That the graph *uses* the server
+    # (rather than its own clock) is test_clock_uses_the_time_server_answer.
     app, *_ = env
     graph, _ = app(*GATHER, GOOD)
     result, _ = run(graph, [{"decision": "reject", "officer": "T. Moyo"}])
@@ -310,3 +317,117 @@ def test_backlog_puts_pest_exposed_planted_households_first():
 
     flags = [exposed(hh) for hh in order]
     assert any(flags) and flags == sorted(flags, reverse=True)
+
+
+# --- review fixes -----------------------------------------------------------
+
+DISTRICT_ONLY = submit(("Wait for 20 mm of rain in a dekad before dry planting.", [RAIN]),
+                       ("Scout for fall armyworm twice a week.", [PEST]))
+
+
+@pytest.mark.parametrize("recommendations", [
+    ["Scout for armyworm"],                          # bare strings
+    [{"text": 5, "citations": [RAIN]}],              # non-string text
+    [{"text": "x", "citations": [7]}],               # non-string citation
+    "not json at all",
+    {"text": "x", "citations": [RAIN]},              # an object, not a list
+])
+def test_malformed_draft_is_retried_then_dropped_not_a_crash(env, recommendations):
+    app, queue, audit, new_items = env
+    bad = call("submit_draft", {"recommendations": recommendations})
+    graph, _ = app(*GATHER, bad, bad)
+    result, pauses = run(graph)
+    assert pauses == [] and result["outcome"]["status"] == "dropped"
+    assert new_items() == []
+
+
+def test_draft_sent_as_a_json_string_is_accepted(env):
+    # Small models often JSON-encode nested arrays; the content is still checked.
+    app, queue, audit, new_items = env
+    as_string = call("submit_draft", {"recommendations": json.dumps(
+        [{"text": "Scout for fall armyworm twice a week.", "citations": [PEST]}])})
+    graph, _ = app(*GATHER, as_string)
+    result, pauses = run(graph, [{"decision": "approve", "officer": "T. Moyo", "answered_via": "prompt"}])
+    assert result["outcome"]["status"] == "approved" and len(new_items()) == 1
+
+
+def test_answer_that_is_not_an_object_is_asked_again(env):
+    app, queue, audit, new_items = env
+    graph, _ = app(*GATHER, GOOD)
+    result, pauses = run(graph, ["approve", {"decision": "reject", "officer": "T. Moyo"}])
+    assert len(pauses) == 2 and "decision object" in pauses[1]["error"]
+    assert result["outcome"]["status"] == "rejected" and len(audit.entries()) == 1
+
+
+def test_clock_uses_the_time_server_answer(tools, tmp_path):
+    # A time server that says 2031: if the graph computed today itself, this fails.
+    def fake_time(timezone: str) -> str:
+        return json.dumps({"timezone": timezone, "datetime": "2031-01-01T08:00:00+02:00",
+                           "day_of_week": "Wednesday", "is_dst": False})
+
+    fake = StructuredTool.from_function(fake_time, name="get_current_time", description="fake")
+    swapped = [fake if t.name == "get_current_time" else t for t in tools]
+    graph = build_graph(ScriptedModel(script=[call("no_advice", {"reason": "test"})]), swapped,
+                        DataStore.load(), _SHARED_QUEUE, AuditLog(tmp_path / "a.jsonl"))
+    result = asyncio.run(graph.ainvoke({"household_id": HH}))
+    assert result["today"] == "2031-01-01"
+    assert asyncio.run(cli.today_from_time_server(swapped)) == date(2031, 1, 1)
+
+
+def test_demo_refuses_a_scripted_decision_without_an_officer(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(cli, "make_model", lambda spec=None: pytest.fail("model started before the check"))
+    assert cli.main(["demo", "--decide", "approve"]) == 2
+    assert "needs --officer" in capsys.readouterr().err
+
+
+def _demo_env(monkeypatch, tmp_path, script):
+    monkeypatch.setenv("EXTENSION_DESK_QUEUE", str(tmp_path / "q.sqlite3"))
+    monkeypatch.setenv("EXTENSION_DESK_AUDIT", str(tmp_path / "a.jsonl"))
+    monkeypatch.setattr(cli, "make_model", lambda spec=None: ScriptedModel(script=script))
+    return AuditLog(tmp_path / "a.jsonl")
+
+
+def test_demo_flag_decisions_are_labelled_as_not_reviewed(monkeypatch, tmp_path):
+    audit = _demo_env(monkeypatch, tmp_path, [*GATHER, DISTRICT_ONLY])
+    assert cli.main(["demo", "--limit", "1", "--decide", "approve", "--officer", "T. Moyo"]) == 0
+    [entry] = audit.entries()
+    assert entry["officer"] == "T. Moyo" and entry["answered_via"] == "flag"
+
+
+def test_demo_asks_until_it_gets_an_officer_name(monkeypatch, tmp_path):
+    audit = _demo_env(monkeypatch, tmp_path, [*GATHER, DISTRICT_ONLY])
+    answers = iter(["", "  ", "T. Moyo", "a"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    assert cli.main(["demo", "--limit", "1"]) == 0
+    [entry] = audit.entries()
+    assert entry["officer"] == "T. Moyo" and entry["answered_via"] == "prompt"
+
+
+def test_backlog_limit_zero_is_the_whole_district():
+    store = DataStore.load()
+    assert len(backlog(store, "mangwe", 0, today=date(2026, 10, 12))) == len(store.households("mangwe"))
+
+
+def test_queue_file_from_before_decisions_is_upgraded(tmp_path):
+    path = tmp_path / "old.sqlite3"
+    with sqlite3.connect(path) as conn:  # the schema #10 shipped
+        conn.execute("""CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL,
+            household_id TEXT NOT NULL, payload TEXT NOT NULL, citations TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending_approval', created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL)""")
+    queue = ReviewQueue(path)
+    item = _pending(queue)
+    gate.decide(queue, AuditLog(tmp_path / "a.jsonl"), item["item_id"], "approve", "T. Moyo")
+    assert queue.get(item["item_id"])["decided_by"] == "T. Moyo"
+
+
+def test_ollama_host_without_a_scheme(monkeypatch):
+    import importlib
+
+    from extension_desk.agent import models
+    monkeypatch.setenv("OLLAMA_HOST", "localhost:11434")
+    try:
+        assert importlib.reload(models).OLLAMA_URL == "http://localhost:11434"
+    finally:
+        monkeypatch.delenv("OLLAMA_HOST")
+        importlib.reload(models)

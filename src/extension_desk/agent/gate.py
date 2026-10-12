@@ -12,13 +12,27 @@ from extension_desk.review_queue import ReviewQueue
 DECISIONS = ("approve", "edit", "reject")
 
 
+ANSWERED_VIA = ("prompt", "flag", "unspecified")
+
+
 def decide(queue: ReviewQueue, audit: AuditLog, item_id: str, decision: str, officer: str,
-           edits: list[str] | None = None, note: str = "") -> dict:
+           edits: list[str] | None = None, note: str = "", answered_via: str = "unspecified") -> dict:
     """Record an officer's decision on a pending advisory.
 
     `edit` replaces recommendation texts (one per recommendation, same
     order, citations kept); an empty text removes that line. Editing every
-    line away is a rejection, not an approval of nothing."""
+    line away is a rejection, not an approval of nothing.
+
+    `answered_via` says how the decision reached the gate: `prompt` (the
+    officer answered the draft in front of them) or `flag` (a fixed decision
+    given on the command line, so no one read this draft). It is logged so a
+    scripted approval can never pass for a reviewed one."""
+    if answered_via not in ANSWERED_VIA:
+        raise ValueError(f"answered_via must be one of {', '.join(ANSWERED_VIA)}")
+    if not isinstance(officer, str) or not officer.strip():
+        raise ValueError("a decision needs the officer's name")
+    if edits is not None and not (isinstance(edits, list) and all(isinstance(t, str) for t in edits)):
+        raise ValueError("edits must be a list of texts")
     if decision not in DECISIONS:
         raise ValueError(f"decision must be one of {', '.join(DECISIONS)}, got {decision!r}")
     item = queue.get(item_id)
@@ -44,6 +58,7 @@ def decide(queue: ReviewQueue, audit: AuditLog, item_id: str, decision: str, off
             decision=decision,
             status=status,
             officer=decided["decided_by"],
+            answered_via=answered_via,
             inputs={"payload": original, "citations": decided["citations"],
                     "created_by": decided["created_by"], "created_at": decided["created_at"]},
             outputs={"final_payload": final, "delivered": False},

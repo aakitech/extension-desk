@@ -11,6 +11,8 @@ import urllib.request
 
 DEFAULT_MODEL = "ollama:qwen2.5:7b"
 OLLAMA_URL = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+if "://" not in OLLAMA_URL:  # Ollama itself accepts host:port
+    OLLAMA_URL = "http://" + OLLAMA_URL
 
 
 class ModelUnavailable(RuntimeError):

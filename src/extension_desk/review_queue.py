@@ -50,6 +50,11 @@ class ReviewQueue:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with closing(self._connect()) as conn, conn:
             conn.execute(_SCHEMA)
+            # Queue files made before decisions existed lack these columns.
+            have = {r["name"] for r in conn.execute("PRAGMA table_info(items)")}
+            for column in ("decided_by", "decided_at", "final_payload"):
+                if column not in have:
+                    conn.execute(f"ALTER TABLE items ADD COLUMN {column} TEXT")
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, timeout=10)

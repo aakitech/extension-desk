@@ -17,7 +17,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
 from extension_desk.agent.audit import AuditLog
-from extension_desk.agent.graph import TIMEZONE, build_graph
+from extension_desk.agent.graph import TIMEZONE, _text, build_graph
 from extension_desk.agent.models import ModelUnavailable, make_model, model_spec
 from extension_desk.data import DataStore
 from extension_desk.districts import DISTRICTS
@@ -51,7 +51,14 @@ def backlog(store: DataStore, district: str, limit: int, today: date | None = No
         days = (today - date.fromisoformat(hh["last_officer_visit"])).days
         return (-(bool(planted & pest_crops)), -bool(planted), -days, hh["record_id"])
 
-    return [hh["record_id"] for hh in sorted(store.households(district), key=score)][:limit]
+    ranked = [hh["record_id"] for hh in sorted(store.households(district), key=score)]
+    return ranked[:limit] if limit else ranked
+
+
+async def today_from_time_server(tools) -> date:
+    tool = next(t for t in tools if t.name == "get_current_time")
+    result = json.loads(_text(await tool.ainvoke({"timezone": TIMEZONE})))
+    return date.fromisoformat(result["datetime"][:10])
 
 
 def show(payload: dict) -> None:
@@ -96,27 +103,34 @@ async def run_household(app, household_id: str, answer) -> dict:
 
 
 async def demo(args) -> int:
+    officer = (args.officer or "").strip()
+    if args.decide != "ask" and not officer:
+        print("--decide approve/reject needs --officer: a scripted decision is still logged under a name.",
+              file=sys.stderr)
+        return 2
     try:
         model = make_model(args.model)
     except ModelUnavailable as e:
         print(f"Can't start the model ({model_spec(args.model)}): {e}", file=sys.stderr)
         return 2
+    while not officer:
+        officer = input("Officer name (recorded with every decision): ").strip()
     store, queue, audit = DataStore.load(), ReviewQueue(), AuditLog()
     tools = await MultiServerMCPClient(mcp_connections(queue)).get_tools()
     app = build_graph(model, tools, store, queue, audit, checkpointer=InMemorySaver())
-
-    officer = args.officer or input("Officer name: ").strip() or "officer"
+    today = await today_from_time_server(tools)
     if args.decide == "ask":
         def answer(payload):
-            return ask_officer(payload, officer)
+            return {**ask_officer(payload, officer), "answered_via": "prompt"}
     else:
         def answer(payload):
             show(payload)
-            print(f"Officer decision ({args.decide}, from --decide)")
-            return {"decision": args.decide, "officer": officer}
+            print(f"Decision: {args.decide} (fixed by --decide; logged as answered_via=flag, not a review)")
+            return {"decision": args.decide, "officer": officer, "answered_via": "flag"}
 
-    households = backlog(store, args.district, args.limit)
-    print(f"Model: {model_spec(args.model)}. District: {args.district}. Backlog: {', '.join(households)}")
+    households = backlog(store, args.district, args.limit, today)
+    print(f"Model: {model_spec(args.model)}. District: {args.district}. Today: {today} (time server). "
+          f"Backlog: {', '.join(households)}")
     print("Nothing is sent to any household. Approved drafts wait in the review queue.")
     outcomes = {}
     for hh in households:
@@ -134,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     d = sub.add_parser("demo", help="run one backlog pass and stop at the officer approval gate")
     d.add_argument("--district", default="chiredzi", choices=sorted(DISTRICTS))
-    d.add_argument("--limit", type=int, default=3, help="households in this pass (default 3)")
+    d.add_argument("--limit", type=int, default=3, help="households in this pass (default 3; 0 = the whole district)")
     d.add_argument("--model", help="ollama:<model> or anthropic:<model> (default from EXTENSION_DESK_MODEL)")
     d.add_argument("--officer", help="officer name recorded in the audit log")
     d.add_argument("--decide", choices=["ask", "approve", "reject"], default="ask",
