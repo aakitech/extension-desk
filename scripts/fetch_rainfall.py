@@ -127,7 +127,9 @@ def read_pixels(url: str) -> dict[str, float]:
     """Rainfall (mm) at each district's pixel in one CHIRPS dekad file."""
     t = read_tags(url)
     width, compression = t[256][0], t[259][0]
-    if t[258][0] != 32 or compression not in (1, 5) or t.get(317, (1,))[0] != 1:
+    if (t[258][0] != 32 or t.get(339, (1,))[0] != 3  # 32-bit float samples
+            or compression not in (1, 5) or t.get(317, (1,))[0] != 1
+            or t[33922][:2] != (0.0, 0.0)):  # tiepoint anchored at the top-left pixel
         raise RuntimeError(f"{url}: unsupported TIFF layout")
     res = Decimal("0.05")
     if abs(t[33550][0] - float(res)) > 1e-6:

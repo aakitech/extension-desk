@@ -1,7 +1,21 @@
+import re
+from datetime import date, timedelta
+
 import pytest
 
 from extension_desk.data import DataStore, UnknownRecord
 from extension_desk.districts import DISTRICTS
+
+_NORMAL = "; normal = 1991-2020 CHIRPS v3.0 final mean"
+RAIN_SOURCES = {
+    "CHIRPS v3.0 final (Climate Hazards Center, UCSB), 0.05-degree pixel" + _NORMAL: "final",
+    "CHIRPS v3.0 preliminary (Climate Hazards Center, UCSB), 0.05-degree pixel; "
+    "final not yet published" + _NORMAL: "prelim",
+}
+FEWS_QUOTE = re.compile(
+    r"; (?P<currency>[A-Z]{3}) (?P<value>[\d.]+) per (?P<pack>[\d.]+)[ _]kg"
+    r"(?:, converted by FEWS NET at (?P<rate>[\d.]+) USD/(?P<rate_currency>[A-Z]{3}))?$"
+)
 
 
 @pytest.fixture(scope="module")
@@ -132,7 +146,9 @@ def test_pest_alerts_only_for_crops_already_planted(store):
             crops = alert["crops_affected"].split(";")
             assert all(c in planted for c in crops), alert["record_id"]
             first_planting = min(d for c in crops for d in planted[c])
-            assert alert["reported_on"] > first_planting, alert["record_id"]
+            # data/README.md promises at least a week after the first planting.
+            earliest = date.fromisoformat(first_planting) + timedelta(days=7)
+            assert date.fromisoformat(alert["reported_on"]) >= earliest, alert["record_id"]
 
 
 def test_every_district_has_recent_non_maize_prices(store):
@@ -149,13 +165,31 @@ def test_prices_are_usd_per_kg_numbers(store):
         assert float(row["price_usd"]) > 0, row["record_id"]
 
 
+def test_fews_prices_match_the_quoted_price_pack_and_rate(store):
+    rows = [r for r in store.tables["prices"] if r["source"].startswith("FEWS NET")]
+    assert rows
+    for row in rows:
+        m = FEWS_QUOTE.search(row["source"])
+        assert m, row["record_id"]
+        per_kg = float(m["value"]) / float(m["pack"])
+        if m["currency"] != "USD":
+            assert m["rate_currency"] == m["currency"], row["record_id"]
+            per_kg *= float(m["rate"])
+        else:
+            assert m["rate"] is None, row["record_id"]
+        # Source keeps the quote to 2 dp and the rate to 5 dp, so allow that much.
+        assert float(row["price_usd"]) == pytest.approx(per_kg, rel=0.01, abs=0.002), row["record_id"]
+
+
 def test_rainfall_is_chirps_with_prelim_only_after_final(store):
     for district in DISTRICTS:
         sources = [r["source"] for r in store.rainfall(district)]
-        assert all(s.startswith("CHIRPS v3.0") for s in sources), district
-        kinds = ["prelim" if "preliminary" in s else "final" for s in sources]
+        assert set(sources) <= set(RAIN_SOURCES), district
+        kinds = [RAIN_SOURCES[s] for s in sources]
         # Prelim fills only the tail the final archive hasn't reached.
-        assert kinds == sorted(kinds), district
+        first_prelim = kinds.index("prelim") if "prelim" in kinds else len(kinds)
+        assert all(k == "final" for k in kinds[:first_prelim]), district
+        assert all(k == "prelim" for k in kinds[first_prelim:]), district
 
 
 def test_mangwe_late_september_rain_is_in_the_data(store):
