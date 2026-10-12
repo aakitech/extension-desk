@@ -70,8 +70,50 @@ def test_dry_season_anomaly_is_blank_not_a_huge_percentage(store):
             assert row["anomaly_pct"] != "", row["record_id"]
 
 
+def test_departure_is_rain_minus_normal(store):
+    for row in store.tables["rainfall"]:
+        expected = round(float(row["rain_mm"]) - float(row["normal_mm"]), 1)
+        assert float(row["departure_mm"]) == pytest.approx(expected), row["record_id"]
+
+
 def test_filters(store):
     chiredzi = store.rainfall("chiredzi", start="2026-01-01", end="2026-01-31")
     assert [r["dekad_start"] for r in chiredzi] == ["2026-01-01", "2026-01-11", "2026-01-21"]
     maize = store.prices("chiredzi", commodity="maize meal")
     assert maize and all(r["commodity"] == "Maize meal" for r in maize)
+
+
+def test_date_filters_accept_month_or_day_in_every_table(store):
+    latest = max(r["month"] for r in store.prices("chiredzi"))
+    assert store.prices("chiredzi", since=latest + "-01") == store.prices("chiredzi", since=latest)
+    by_month = store.rainfall("chiredzi", start="2026-01", end="2026-01")
+    by_day = store.rainfall("chiredzi", start="2026-01-01", end="2026-01-31")
+    assert by_month == by_day and len(by_month) == 3
+    with pytest.raises(ValueError):
+        store.prices("chiredzi", since="May 2026")
+
+
+def test_unknown_district_raises_instead_of_returning_nothing(store):
+    assert store.rainfall("Chiredzi") == store.rainfall("chiredzi")
+    with pytest.raises(ValueError, match="known districts"):
+        store.rainfall("harare")
+
+
+def test_returned_rows_are_copies(store):
+    row = store.households("chiredzi")[0]
+    row["district"] = "tampered"
+    assert store.get(row["record_id"])["district"] == "chiredzi"
+
+
+def test_pest_alerts_only_for_crops_already_planted(store):
+    for district in DISTRICTS:
+        planted = {}
+        for hh in store.households(district):
+            for plot in store.plots(hh["record_id"]):
+                if plot["planted_on"]:
+                    planted.setdefault(plot["crop"], []).append(plot["planted_on"])
+        for alert in store.pest_alerts(district):
+            crops = alert["crops_affected"].split(";")
+            assert all(c in planted for c in crops), alert["record_id"]
+            first_planting = min(d for c in crops for d in planted[c])
+            assert alert["reported_on"] > first_planting, alert["record_id"]

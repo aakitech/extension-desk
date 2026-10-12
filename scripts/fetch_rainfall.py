@@ -77,17 +77,19 @@ def main() -> None:
             complete = counts[(y, m, dk)] == (stop - start).days + 1
             if start < KEEP_FROM or not complete:
                 continue
-            normal = statistics.mean(normals[(m, dk)])
+            total = round(total, 1)
+            normal = round(statistics.mean(normals[(m, dk)]), 1)
             anomaly = round((total - normal) / normal * 100) if normal >= MIN_NORMAL_MM else None
             rows.append({
                 "record_id": f"rain:{key}:{y}-{m:02d}-d{dk}",
                 "district": key,
                 "dekad_start": start.isoformat(),
                 "dekad_end": stop.isoformat(),
-                "rain_mm": round(total, 1),
-                "normal_mm": round(normal, 1),
+                "rain_mm": total,
+                "normal_mm": normal,
+                "departure_mm": round(total - normal, 1),
                 "anomaly_pct": "" if anomaly is None else anomaly,
-                "source": "Open-Meteo archive, ERA5 reanalysis; normal = 1991-2020 mean",
+                "source": "Open-Meteo archive (CC BY 4.0), ERA5 reanalysis; normal = 1991-2020 mean",
             })
 
     OUT.parent.mkdir(exist_ok=True)
