@@ -96,8 +96,8 @@ def test_date_filters_accept_month_or_day_in_every_table(store):
     lambda s: s.rainfall("chiredzi", start="2026-13-99"),
     lambda s: s.rainfall("chiredzi", end="2026-02-30"),
     lambda s: s.rainfall("chiredzi", start="2026-03", end="2026-01"),
-    # No sorghum rows exist: a bad date must still raise, not return [].
-    lambda s: s.prices("chiredzi", commodity="sorghum", since="May 2026"),
+    # No cassava rows exist: a bad date must still raise, not return [].
+    lambda s: s.prices("chiredzi", commodity="cassava", since="May 2026"),
     lambda s: s.pest_alerts("chiredzi", since="2026-1-5"),
 ])
 def test_bad_date_input_raises_even_when_no_rows_match(store, call):
@@ -133,3 +133,31 @@ def test_pest_alerts_only_for_crops_already_planted(store):
             assert all(c in planted for c in crops), alert["record_id"]
             first_planting = min(d for c in crops for d in planted[c])
             assert alert["reported_on"] > first_planting, alert["record_id"]
+
+
+def test_every_district_has_recent_non_maize_prices(store):
+    latest = max(r["month"] for r in store.tables["prices"])
+    for district in DISTRICTS:
+        recent = {r["commodity"] for r in store.prices(district, since=latest)
+                  if not r["commodity"].lower().startswith("maize")}
+        assert {"Sorghum", "Pearl millet", "Groundnuts (shelled)"} <= recent, district
+
+
+def test_prices_are_usd_per_kg_numbers(store):
+    for row in store.tables["prices"]:
+        assert row["unit"] == "KG", row["record_id"]
+        assert float(row["price_usd"]) > 0, row["record_id"]
+
+
+def test_rainfall_is_chirps_with_prelim_only_after_final(store):
+    for district in DISTRICTS:
+        sources = [r["source"] for r in store.rainfall(district)]
+        assert all(s.startswith("CHIRPS v3.0") for s in sources), district
+        kinds = ["prelim" if "preliminary" in s else "final" for s in sources]
+        # Prelim fills only the tail the final archive hasn't reached.
+        assert kinds == sorted(kinds), district
+
+
+def test_mangwe_late_september_rain_is_in_the_data(store):
+    # The "false start" eval case depends on this dekad existing.
+    assert store.exists("rain:mangwe:2026-09-d3")
