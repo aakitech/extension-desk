@@ -1,0 +1,20 @@
+{
+  "started_at": "2026-10-12T23:05:49+00:00",
+  "command": [
+    "extension-desk",
+    "eval",
+    "--update-evals"
+  ],
+  "commit": "14055904306984564f8c5a868f9eb2b0caca1afc-dirty",
+  "task": "crop_relevant_pests",
+  "covers": "pest advice only for crops the household grows",
+  "fixture": false,
+  "model": "real",
+  "households": {
+    "hh:018": {
+      "status": "dropped",
+      "seconds": 142.2
+    }
+  },
+  "finished_at": "2026-10-12T23:08:11+00:00"
+}

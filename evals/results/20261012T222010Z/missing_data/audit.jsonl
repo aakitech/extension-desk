@@ -1,0 +1,1 @@
+{"event": "no_advice", "household_id": "hh:002", "inputs": {"seen": ["hh:002", "plot:002-1"]}, "outputs": {"declined_via": "text", "reason": "no_advice"}, "timestamp": "2026-10-12T22:23:12+00:00"}
