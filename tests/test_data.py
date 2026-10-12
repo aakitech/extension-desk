@@ -195,3 +195,17 @@ def test_rainfall_is_chirps_with_prelim_only_after_final(store):
 def test_mangwe_late_september_rain_is_in_the_data(store):
     # The "false start" eval case depends on this dekad existing.
     assert store.exists("rain:mangwe:2026-09-d3")
+
+
+def test_data_dir_can_be_overridden_for_evals(tmp_path, monkeypatch):
+    import shutil
+
+    from extension_desk.data import DATA_DIR
+    for f in DATA_DIR.glob("*.csv"):
+        shutil.copy(f, tmp_path / f.name)
+    rows = (tmp_path / "pest_alerts.csv").read_text(encoding="utf-8").splitlines()
+    (tmp_path / "pest_alerts.csv").write_text("\n".join(rows[:2]) + "\n", encoding="utf-8")
+    monkeypatch.setenv("EXTENSION_DESK_DATA", str(tmp_path))
+    assert len(DataStore.load().tables["pest_alerts"]) == 1
+    monkeypatch.delenv("EXTENSION_DESK_DATA")
+    assert len(DataStore.load().tables["pest_alerts"]) == 6
