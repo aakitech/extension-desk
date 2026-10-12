@@ -32,7 +32,8 @@ QUEUE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHin
 def build_server(store: DataStore | None = None, queue: ReviewQueue | None = None) -> FastMCP:
     store = store or DataStore.load()
     queue = queue or ReviewQueue()
-    mcp = FastMCP("extension-desk", instructions=INSTRUCTIONS)
+    # WARNING: the per-request INFO lines drown the demo's own output.
+    mcp = FastMCP("extension-desk", instructions=INSTRUCTIONS, log_level="WARNING")
 
     @mcp.tool(annotations=READ)
     def get_rainfall(district: str, start: str = "", end: str = "") -> dict:

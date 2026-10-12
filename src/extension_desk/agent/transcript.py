@@ -37,13 +37,18 @@ def _commit() -> str | None:
     return out.stdout.strip() + ("-dirty" if dirty.stdout.strip() else "")
 
 
+def command() -> list[str]:
+    """argv with the program reduced to its name: no local paths in committed records."""
+    return [Path(sys.argv[0]).name, *sys.argv[1:]]
+
+
 class Transcript:
-    def __init__(self, root: Path | str | None = None, **meta) -> None:
+    def __init__(self, root: Path | str | None = None, name: str | None = None, **meta) -> None:
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        self.dir = Path(root or default_dir()) / stamp
+        self.dir = Path(root or default_dir()) / (name or stamp)
         self.dir.mkdir(parents=True, exist_ok=False)
         self.meta = {"started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                     "command": sys.argv, "commit": _commit(), **meta, "households": {}}
+                     "command": command(), "commit": _commit(), **meta, "households": {}}
         self._write("run.json", self.meta)
 
     def _write(self, name: str, data) -> None:
