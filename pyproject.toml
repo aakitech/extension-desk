@@ -9,6 +9,7 @@ dependencies = [
     "mcp",
     "langgraph",
     "langchain-mcp-adapters",
+    "pydantic>=2",
 ]
 
 [project.scripts]

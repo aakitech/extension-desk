@@ -7,6 +7,7 @@ citations, then writes a `pending_approval` item to the review queue for an
 officer. A call that fails validation writes nothing.
 """
 
+import re
 from datetime import date
 
 from pydantic import BaseModel, Field
@@ -56,16 +57,20 @@ def get_rainfall(store: DataStore, district: str, start: str = "", end: str = ""
 
 def get_prices(store: DataStore, district: str, crop: str = "", market: str = "",
                since: str = "") -> dict:
+    crop, market = crop.strip().lower(), market.strip().lower()
+
+    def matches(r: dict) -> bool:
+        return ((not crop or crop in r["commodity"].lower())
+                and (not market or market == r["market"].lower()))
+
     available = store.prices(district)
-    if crop and not any(crop.lower() in r["commodity"].lower() for r in available):
-        raise ValueError(f"no prices for {crop!r} in {district}; available: "
-                         + ", ".join(sorted({r['commodity'] for r in available})))
-    if market and not any(market.lower() == r["market"].lower() for r in available):
-        raise ValueError(f"no market {market!r} in {district}; available: "
-                         + ", ".join(sorted({r['market'] for r in available})))
-    rows = [r for r in store.prices(district, since=since)
-            if (not crop or crop.lower() in r["commodity"].lower())
-            and (not market or market.lower() == r["market"].lower())]
+    # Checked on the combined filter, so a real crop at a real market that
+    # never quotes it raises instead of looking like missing data.
+    if (crop or market) and not any(matches(r) for r in available):
+        pairs = sorted({f"{r['commodity']} at {r['market']}" for r in available})
+        raise ValueError(f"no prices for crop={crop!r} market={market!r} in {district}; "
+                         "available: " + ", ".join(pairs))
+    rows = [r for r in store.prices(district, since=since) if matches(r)]
     series: dict[tuple[str, str], list[dict]] = {}
     for r in sorted(rows, key=lambda r: r["month"]):
         series.setdefault((r["market"], r["commodity"]), []).append(r)
@@ -92,7 +97,7 @@ def get_prices(store: DataStore, district: str, crop: str = "", market: str = ""
 def get_plot_records(store: DataStore, household_id: str = "", district: str = "") -> dict:
     if bool(household_id) == bool(district):
         raise ValueError("give exactly one of household_id or district")
-    households = [store.household(household_id)] if household_id else store.households(district)
+    households = [_household(store, household_id)] if household_id else store.households(district)
     out, citations = [], []
     for hh in households:
         plots = store.plots(hh["record_id"])
@@ -115,7 +120,9 @@ def get_pest_alerts(store: DataStore, district: str, since: str = "") -> dict:
 def check_citations(store: DataStore, household_id: str, citations: list[str]) -> None:
     """Every citation must be a record that exists and is about this
     household: the household itself, one of its plots, or a rainfall, price
-    or pest record for its district."""
+    or pest record for its district. This proves each citation is relevant
+    to the household; it can't prove the record supports the claim. That is
+    the officer's call at the approval gate."""
     if not citations:
         raise CitationError("at least one citation is required")
     district = store.household(household_id)["district"]
@@ -139,6 +146,9 @@ def check_citations(store: DataStore, household_id: str, citations: list[str]) -
             bad.append(f"{rid}: not about {household_id} or {district}")
     if bad:
         raise CitationError("invalid citations: " + "; ".join(bad))
+
+
+EVIDENCE = ("rain", "price", "pest", "plot")
 
 
 def _household(store: DataStore, household_id: str) -> dict:
@@ -165,6 +175,10 @@ def draft_advisory(store: DataStore, queue: ReviewQueue, household_id: str,
         text = _text(rec.text, f"recommendation {i} text")
         try:
             check_citations(store, household_id, rec.citations)
+            # The household record alone says who, not why: each line of
+            # advice must also cite rainfall, price, pest or plot evidence.
+            if not any(c.split(":", 1)[0] in EVIDENCE for c in rec.citations):
+                raise CitationError("needs at least one rain:, price:, pest: or plot: citation")
         except CitationError as e:
             raise CitationError(f"recommendation {i} ({text[:40]!r}): {e}") from None
         recs.append({"text": text, "citations": list(dict.fromkeys(rec.citations))})
@@ -188,6 +202,8 @@ def schedule_followup(store: DataStore, queue: ReviewQueue, household_id: str, v
     _household(store, household_id)
     reason = _text(reason, "reason")
     try:
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", visit_date):
+            raise ValueError
         when = date.fromisoformat(visit_date)
     except ValueError:
         raise ValueError(f"visit_date must be YYYY-MM-DD, got {visit_date!r}") from None

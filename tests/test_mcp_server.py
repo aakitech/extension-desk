@@ -68,13 +68,19 @@ def test_prices_match_crop_by_name_and_cite_every_point(store):
     assert series["change_pct"] == round((last - first) / first * 100)
 
 
-@pytest.mark.parametrize("kwargs, message", [
-    ({"crop": "cassava"}, "available: "),
-    ({"market": "Harare"}, "available: "),
+@pytest.mark.parametrize("kwargs", [
+    {"crop": "cassava"},
+    {"market": "Harare"},
+    # Both exist in mangwe, but Gwanda never quotes maize meal.
+    {"crop": "maize meal", "market": "Gwanda"},
 ])
-def test_prices_unknown_crop_or_market_raises_with_options(store, kwargs, message):
-    with pytest.raises(ValueError, match=message):
-        tools.get_prices(store, "chiredzi", **kwargs)
+def test_prices_unmatched_filter_raises_with_options(store, kwargs):
+    with pytest.raises(ValueError, match="available: .*Sorghum at Gwanda"):
+        tools.get_prices(store, "mangwe", **kwargs)
+
+
+def test_prices_blank_filters_mean_no_filter(store):
+    assert tools.get_prices(store, "mangwe", crop=" ", market=" ") == tools.get_prices(store, "mangwe")
 
 
 def test_plot_records_by_household_or_district(store):
@@ -87,6 +93,8 @@ def test_plot_records_by_household_or_district(store):
     for kwargs in ({}, {"household_id": hh, "district": "mangwe"}):
         with pytest.raises(ValueError, match="exactly one"):
             tools.get_plot_records(store, **kwargs)
+    with pytest.raises(ValueError, match="unknown household 'hh:999'"):
+        tools.get_plot_records(store, household_id="hh:999")
 
 
 def test_pest_alerts_newest_first(store):
@@ -121,13 +129,20 @@ def test_draft_advisory_queues_a_pending_draft_with_all_citations(store, queue):
     (["price:sorghum:gwanda:2026-09"], "not about"),  # another district's market
     (["hh:026"], "not about"),                        # another household
     (["plot:002-1"], "not about"),                    # another household's plot
-    (["advisory:1"], "no such record"),               # a queue item is not a source
+    (["hh:001"], "needs at least one rain:, price:, pest: or plot:"),  # who, not why
 ])
 def test_one_bad_recommendation_rejects_the_whole_draft(store, queue, citations, message):
     good = rec("Scout for fall armyworm", "pest:chiredzi:001")
     with pytest.raises(CitationError, match=message):
         tools.draft_advisory(store, queue, "hh:001", [good, rec("Plant now", *citations)])
     assert queue.items() == []
+
+
+def test_a_queue_item_is_not_a_source(store, queue):
+    flag = tools.flag_for_followup(store, queue, "hh:001", "Missed last visit", ["hh:001"])
+    with pytest.raises(CitationError, match="no such record"):
+        tools.draft_advisory(store, queue, "hh:001", [rec("Visit soon", flag["item_id"])])
+    assert [i["item_id"] for i in queue.items()] == [flag["item_id"]]
 
 
 def test_draft_advisory_rejects_empty_input_and_unknown_household(store, queue):
@@ -156,6 +171,8 @@ def test_flag_for_followup_needs_valid_citations(store, queue):
     ("2026-10-11", "in the past"),
     ("next week", "YYYY-MM-DD"),
     ("2026-02-30", "YYYY-MM-DD"),
+    ("20261020", "YYYY-MM-DD"),     # Python accepts these ISO forms; the tool doesn't
+    ("2026-W43-1", "YYYY-MM-DD"),
 ])
 def test_schedule_followup_rejects_bad_dates(store, queue, visit_date, message):
     with pytest.raises(ValueError, match=message):
