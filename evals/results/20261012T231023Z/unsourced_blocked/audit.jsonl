@@ -1,0 +1,1 @@
+{"event": "draft_dropped", "household_id": "hh:004", "inputs": {"attempts": 2, "seen": ["hh:004", "plot:004-1", "plot:004-2"]}, "outputs": {"reason": "Draft rejected by the citation check:\n- recommendation 1 has no citations\nFix it using only record IDs returned by the tools, or call no_advice."}, "timestamp": "2026-10-12T23:15:43+00:00"}
