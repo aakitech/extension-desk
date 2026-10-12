@@ -381,6 +381,8 @@ def test_demo_refuses_a_scripted_decision_without_an_officer(monkeypatch, tmp_pa
 
 
 def _demo_env(monkeypatch, tmp_path, script):
+    monkeypatch.setenv("EXTENSION_DESK_RUNS", str(tmp_path / "runs"))
+    monkeypatch.setattr(cli, "model_details", lambda spec=None: {"provider": "scripted"})
     monkeypatch.setenv("EXTENSION_DESK_QUEUE", str(tmp_path / "q.sqlite3"))
     monkeypatch.setenv("EXTENSION_DESK_AUDIT", str(tmp_path / "a.jsonl"))
     monkeypatch.setattr(cli, "make_model", lambda spec=None: ScriptedModel(script=script))
@@ -480,3 +482,18 @@ def test_turn_limit_holds_when_the_server_refuses_on_the_last_turn(env):
     result, pauses = run(graph)
     assert model.calls == MAX_TURNS and pauses == []
     assert result["outcome"]["status"] == "dropped" and new_items() == []
+
+
+def test_demo_writes_a_transcript_of_what_the_model_did(monkeypatch, tmp_path):
+    audit = _demo_env(monkeypatch, tmp_path, [*GATHER, DISTRICT_ONLY])
+    assert cli.main(["demo", "--limit", "1", "--decide", "reject", "--officer", "T. Moyo"]) == 0
+    [run_dir] = (tmp_path / "runs").iterdir()
+    meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    [hh] = meta["backlog"]
+    assert meta["model_details"] == {"provider": "scripted"} and meta["decide"] == "reject"
+    assert meta["households"][hh]["status"] == "rejected" and meta["commit"]
+    record = json.loads((run_dir / f"{hh.replace(':', '_')}.json").read_text(encoding="utf-8"))
+    calls = [tc["name"] for m in record["messages"] if m["type"] == "ai" for tc in m["data"]["tool_calls"]]
+    assert calls == ["get_plot_records", "get_rainfall", "get_pest_alerts", "submit_draft"]
+    assert record["gate"][0]["answer"]["answered_via"] == "flag"
+    assert record["outcome"]["status"] == "rejected" and RAIN in record["seen"]

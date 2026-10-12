@@ -10,6 +10,7 @@ import asyncio
 import json
 import os
 import sys
+import time
 import uuid
 from datetime import date
 
@@ -19,7 +20,8 @@ from langgraph.types import Command
 
 from extension_desk.agent.audit import AuditLog
 from extension_desk.agent.graph import TIMEZONE, _text, build_graph
-from extension_desk.agent.models import ModelUnavailable, make_model, model_spec
+from extension_desk.agent.models import ModelUnavailable, make_model, model_details, model_spec
+from extension_desk.agent.transcript import Transcript
 from extension_desk.data import DataStore
 from extension_desk.districts import DISTRICTS
 from extension_desk.review_queue import ReviewQueue
@@ -95,12 +97,18 @@ def ask_officer(payload: dict, officer: str) -> dict:
     return {"decision": "edit", "officer": officer, "edits": edits}
 
 
-async def run_household(app, household_id: str, answer) -> dict:
+async def run_household(app, household_id: str, answer, transcript: Transcript | None = None) -> dict:
     # A new thread per run: nothing from an earlier run of this household carries over.
     config = {"configurable": {"thread_id": f"{household_id}:{uuid.uuid4()}"}}
+    started, gate = time.monotonic(), []
     result = await app.ainvoke({"household_id": household_id}, config)
     while result.get("__interrupt__"):
-        result = await app.ainvoke(Command(resume=answer(result["__interrupt__"][0].value)), config)
+        pause = result["__interrupt__"][0].value
+        reply = answer(pause)
+        gate.append({"shown": pause, "answer": reply})
+        result = await app.ainvoke(Command(resume=reply), config)
+    if transcript:
+        transcript.household(household_id, state=result, gate=gate, seconds=time.monotonic() - started)
     return result["outcome"]
 
 
@@ -131,17 +139,20 @@ async def demo(args) -> int:
             return {"decision": args.decide, "officer": officer, "answered_via": "flag"}
 
     households = backlog(store, args.district, args.limit, today)
+    transcript = Transcript(args.runs_dir, model=model_spec(args.model), model_details=model_details(args.model),
+                            district=args.district, today=today.isoformat(), backlog=households,
+                            decide=args.decide, officer=officer)
     print(f"Model: {model_spec(args.model)}. District: {args.district}. Today: {today} (time server). "
           f"Backlog: {', '.join(households)}")
     print("Nothing is sent to any household. Approved drafts wait in the review queue.")
     outcomes = {}
     for hh in households:
         print(f"\n=== {hh} ===")
-        outcomes[hh] = await run_household(app, hh, answer)
+        outcomes[hh] = await run_household(app, hh, answer, transcript)
         o = outcomes[hh]
         print(f"Outcome: {o['status']}" + (f" ({o.get('reason')})" if o.get("reason") else "")
               + (f", {o['item_id']} by {o['officer']}" if o.get("item_id") else "") + ". Not sent.")
-    print(f"\nReview queue: {queue.path}\nAudit log: {audit.path}")
+    print(f"\nReview queue: {queue.path}\nAudit log: {audit.path}\nTranscript: {transcript.dir}")
     return 0
 
 
@@ -153,6 +164,7 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--limit", type=int, default=3, help="households in this pass (default 3; 0 = the whole district)")
     d.add_argument("--model", help="ollama:<model> or anthropic:<model> (default from EXTENSION_DESK_MODEL)")
     d.add_argument("--officer", help="officer name recorded in the audit log")
+    d.add_argument("--runs-dir", help="where run transcripts go (default state/runs)")
     d.add_argument("--decide", choices=["ask", "approve", "reject"], default="ask",
                    help="answer the gate interactively (default) or with a fixed decision")
     args = parser.parse_args(argv)

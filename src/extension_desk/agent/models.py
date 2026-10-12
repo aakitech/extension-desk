@@ -40,6 +40,28 @@ def make_model(spec: str | None = None):
     raise ModelUnavailable(f"unknown model provider {provider!r}; use ollama:<model> or anthropic:<model>")
 
 
+def model_details(spec: str | None = None) -> dict:
+    """The exact model build, for run records. Best effort: never raises."""
+    provider, _, name = model_spec(spec).partition(":")
+    details = {"provider": provider, "name": name}
+    if provider != "ollama":
+        return details
+    try:
+        with urllib.request.urlopen(f"{OLLAMA_URL}/api/tags", timeout=5) as resp:
+            for m in json.load(resp).get("models", []):
+                if m["name"] in (name, f"{name}:latest"):
+                    details.update(digest=m.get("digest"), modified_at=m.get("modified_at"), size=m.get("size"))
+        req = urllib.request.Request(f"{OLLAMA_URL}/api/show", data=json.dumps({"model": name}).encode(),
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            details.update(json.load(resp).get("details", {}))
+        with urllib.request.urlopen(f"{OLLAMA_URL}/api/version", timeout=5) as resp:
+            details["ollama_version"] = json.load(resp).get("version")
+    except (OSError, ValueError, KeyError) as e:
+        details["error"] = str(e)
+    return details
+
+
 def _check_ollama(name: str) -> None:
     try:
         with urllib.request.urlopen(f"{OLLAMA_URL}/api/tags", timeout=5) as resp:
