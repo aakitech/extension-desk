@@ -38,11 +38,12 @@ def get_rainfall(store: DataStore, district: str, start: str = "", end: str = ""
         rows = rows[-DEFAULT_DEKADS:]
     if not rows:
         # No records is not the same as zero rain: say so, don't sum to 0.
+        every = store.rainfall(district)
+        note = ("No rainfall records for this period; the latest dekad is " + every[-1]["dekad_start"]
+                if every else f"No rainfall records at all for {district.strip().lower()}")
         return {"district": district.strip().lower(), "period": None, "total_mm": None,
                 "normal_mm": None, "departure_mm": None, "anomaly_pct": None,
-                "includes_preliminary": False, "dekads": [], "citations": [],
-                "note": "No rainfall records for this period; the latest dekad is "
-                        + store.rainfall(district)[-1]["dekad_start"]}
+                "includes_preliminary": False, "dekads": [], "citations": [], "note": note}
     total = round(sum(float(r["rain_mm"]) for r in rows), 1)
     normal = round(sum(float(r["normal_mm"]) for r in rows), 1)
     return {
