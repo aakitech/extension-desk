@@ -43,11 +43,28 @@ def command() -> list[str]:
     return [Path(a).name if Path(a).is_absolute() else a for a in [sys.argv[0], *sys.argv[1:]]]
 
 
+def unique_dir(root: Path, name: str) -> Path:
+    """Create root/name, or root/name-2, -3... if a run in the same second
+    already took it."""
+    root.mkdir(parents=True, exist_ok=True)
+    for n in range(1, 1000):
+        path = root / (name if n == 1 else f"{name}-{n}")
+        try:
+            path.mkdir()
+            return path
+        except FileExistsError:
+            continue
+    raise RuntimeError(f"no free directory name for {name} under {root}")
+
+
 class Transcript:
     def __init__(self, root: Path | str | None = None, name: str | None = None, **meta) -> None:
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        self.dir = Path(root or default_dir()) / (name or stamp)
-        self.dir.mkdir(parents=True, exist_ok=False)
+        root = Path(root or default_dir())
+        if name:  # a named directory (one per eval task) must be new
+            self.dir = root / name
+            self.dir.mkdir(parents=True, exist_ok=False)
+        else:
+            self.dir = unique_dir(root, datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
         self.meta = {"started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                      "command": command(), "commit": _commit(), **meta, "households": {}}
         self._write("run.json", self.meta)

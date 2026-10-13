@@ -576,3 +576,11 @@ def test_text_that_mentions_no_advice_without_declining_carries_on(env):
 def test_what_counts_as_a_text_decline(text, declines):
     from extension_desk.agent.graph import _declines_in_text
     assert _declines_in_text(text) is declines
+
+
+def test_runs_started_in_the_same_second_get_separate_directories(tmp_path):
+    # Munashe's review note on #11: the second run used to fail on mkdir.
+    from extension_desk.agent.transcript import unique_dir
+    first = unique_dir(tmp_path, "20261013T090000Z")
+    second = unique_dir(tmp_path, "20261013T090000Z")
+    assert first.name == "20261013T090000Z" and second.name == "20261013T090000Z-2"

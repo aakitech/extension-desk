@@ -24,7 +24,7 @@ from extension_desk.agent import cli
 from extension_desk.agent.audit import AuditLog
 from extension_desk.agent.graph import build_graph
 from extension_desk.agent.models import make_model, model_details, model_spec
-from extension_desk.agent.transcript import Transcript, _commit, command
+from extension_desk.agent.transcript import Transcript, _commit, command, unique_dir
 from extension_desk.data import DataStore
 from extension_desk.evals import fixtures
 from extension_desk.evals.tasks import TASKS, Run, Task
@@ -169,9 +169,8 @@ async def run_all(args) -> int:
         print(f"no such task; choose from {', '.join(t.name for t in TASKS)}", file=sys.stderr)
         return 2
     model = make_model(args.model) if any(t.model == "real" for t in chosen) else None
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    out = Path(args.results_dir or RESULTS) / stamp
-    out.mkdir(parents=True)
+    out = unique_dir(Path(args.results_dir or RESULTS), datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
+    stamp = out.name
     meta = {"run": stamp, "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "model": model_spec(args.model) if model else "none (scripted tasks only)",
             "model_details": model_details(args.model) if model else {}, "commit": _commit(),
