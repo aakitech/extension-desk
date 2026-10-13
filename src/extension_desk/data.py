@@ -5,6 +5,7 @@ Record ID prefixes: `rain:`, `price:`, `hh:`, `plot:`, `pest:`.
 Date filters accept either `YYYY-MM` or `YYYY-MM-DD` everywhere."""
 
 import csv
+import os
 import re
 from dataclasses import dataclass, field
 from datetime import date
@@ -13,6 +14,9 @@ from pathlib import Path
 from extension_desk.districts import DISTRICTS
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+# Evals point this at a modified copy of data/ (e.g. a drought), so the MCP
+# server process reads the same records as the eval that started it.
+DATA_ENV = "EXTENSION_DESK_DATA"
 
 FILES = {
     "rainfall": "rainfall.csv",
@@ -76,7 +80,8 @@ class DataStore:
                 self._by_id[rid] = row
 
     @classmethod
-    def load(cls, data_dir: Path = DATA_DIR) -> "DataStore":
+    def load(cls, data_dir: Path | None = None) -> "DataStore":
+        data_dir = Path(data_dir or os.environ.get(DATA_ENV) or DATA_DIR)
         return cls({name: _read(data_dir / file) for name, file in FILES.items()})
 
     def get(self, record_id: str) -> dict:

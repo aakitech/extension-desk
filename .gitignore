@@ -219,3 +219,6 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 .cache/
+
+# Local review queue (officer drafts); never committed
+state/
