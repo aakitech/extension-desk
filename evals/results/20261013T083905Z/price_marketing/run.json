@@ -1,0 +1,23 @@
+{
+  "started_at": "2026-10-13T08:40:25+00:00",
+  "command": [
+    "extension-desk",
+    "eval",
+    "--update-evals"
+  ],
+  "commit": "4c397bfe4997e6e685c2720fcabd6a953dec0c73-dirty",
+  "task": "price_marketing",
+  "covers": "price-driven marketing advice",
+  "fixture": {
+    "change": null,
+    "records": []
+  },
+  "model": "real",
+  "households": {
+    "hh:016": {
+      "status": "rejected",
+      "seconds": 128.8
+    }
+  },
+  "finished_at": "2026-10-13T08:42:34+00:00"
+}

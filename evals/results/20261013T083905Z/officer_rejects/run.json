@@ -1,0 +1,23 @@
+{
+  "started_at": "2026-10-13T08:44:20+00:00",
+  "command": [
+    "extension-desk",
+    "eval",
+    "--update-evals"
+  ],
+  "commit": "4c397bfe4997e6e685c2720fcabd6a953dec0c73-dirty",
+  "task": "officer_rejects",
+  "covers": "officer rejects: nothing recorded as sent",
+  "fixture": {
+    "change": null,
+    "records": []
+  },
+  "model": "real",
+  "households": {
+    "hh:018": {
+      "status": "rejected",
+      "seconds": 140.0
+    }
+  },
+  "finished_at": "2026-10-13T08:46:40+00:00"
+}

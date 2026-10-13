@@ -1,0 +1,30 @@
+{
+  "started_at": "2026-10-13T08:39:12+00:00",
+  "command": [
+    "extension-desk",
+    "eval",
+    "--update-evals"
+  ],
+  "commit": "4c397bfe4997e6e685c2720fcabd6a953dec0c73",
+  "task": "drought_planted_plot",
+  "covers": "normal advisory for a planted plot with a rainfall deficit",
+  "fixture": {
+    "change": "drought: zero rain in chiredzi for 2026-08, 2026-09",
+    "records": [
+      "rain:chiredzi:2026-08-d1",
+      "rain:chiredzi:2026-08-d2",
+      "rain:chiredzi:2026-08-d3",
+      "rain:chiredzi:2026-09-d1",
+      "rain:chiredzi:2026-09-d2",
+      "rain:chiredzi:2026-09-d3"
+    ]
+  },
+  "model": "real",
+  "households": {
+    "hh:003": {
+      "status": "rejected",
+      "seconds": 73.0
+    }
+  },
+  "finished_at": "2026-10-13T08:40:25+00:00"
+}

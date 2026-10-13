@@ -1,0 +1,1 @@
+{"event": "no_advice", "household_id": "hh:002", "inputs": {"seen": ["hh:002", "plot:002-1"]}, "outputs": {"declined_via": "text", "reason": "Insufficient data available for maize prices, rainfall, and pest alerts in Chiredzi district."}, "timestamp": "2026-10-13T08:43:00+00:00"}
