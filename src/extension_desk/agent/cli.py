@@ -176,6 +176,8 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--model", help="ollama:<model> or anthropic:<model> (default from EXTENSION_DESK_MODEL)")
     e.add_argument("--results-dir", help="where results go (default evals/results)")
     e.add_argument("--update-evals", action="store_true", help="rewrite the results table in EVALS.md")
+    e.add_argument("--regrade", nargs="+", metavar="RUN_DIR",
+                   help="re-score stored runs with today's checks (no model); writes regrade-<commit>.json")
     args = parser.parse_args(argv)
     if args.command == "eval":
         from extension_desk.evals.harness import run_all

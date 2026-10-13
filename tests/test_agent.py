@@ -554,3 +554,25 @@ def test_drop_reason_is_text_not_a_message_repr(env):
     result, _ = run(graph)
     assert result["outcome"]["reason"].startswith("The review queue refused the draft")
     assert "additional_kwargs" not in result["outcome"]["reason"]
+
+
+def test_text_that_mentions_no_advice_without_declining_carries_on(env):
+    # Codex's case: this ended the run as no_advice before any evidence.
+    app, queue, audit, new_items = env
+    text = AIMessage("I will not call no_advice because the records support advice. I should gather rainfall next.")
+    graph, model = app(GATHER[0], text, *GATHER[1:], GOOD)
+    result, pauses = run(graph, [{"decision": "reject", "officer": "T. Moyo"}])
+    assert len(pauses) == 1 and result["outcome"]["status"] == "rejected"
+
+
+@pytest.mark.parametrize("text, declines", [
+    ("no_advice", True),
+    ("`no_advice`.", True),
+    ('No_advice will be submitted.\n```json\n{"reason": "No rainfall records."}\n```', True),
+    ("Rather than no_advice, here is my plan.", False),
+    ("I could use no_advice, but the data is fine.", False),
+    ("I won't use no_advice.", False),
+])
+def test_what_counts_as_a_text_decline(text, declines):
+    from extension_desk.agent.graph import _declines_in_text
+    assert _declines_in_text(text) is declines

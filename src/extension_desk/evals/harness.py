@@ -95,6 +95,36 @@ async def run_task(task: Task, model, out: Path) -> dict:
             "outcome": run.outcome.get("status") or ("crash" if error else None), "seconds": seconds}
 
 
+def regrade(run_dir: Path) -> dict:
+    """Re-score a stored run with today's checks, without calling any model.
+
+    Reads each task's stored transcript, queue and audit log, rebuilds its
+    fixture data, and applies the current check. The original results.json
+    is left alone; the re-grade goes to regrade-<commit>.json beside it."""
+    from langchain_core.messages import messages_from_dict
+    run_dir = Path(run_dir)
+    original = json.loads((run_dir / "results.json").read_text(encoding="utf-8"))
+    by_name = {t.name: t for t in TASKS}
+    out = {"run": run_dir.name, "regraded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+           "commit": _commit(), "tasks": []}
+    for stored in original["tasks"]:
+        task, task_dir = by_name[stored["task"]], run_dir / stored["task"]
+        record = json.loads((task_dir / f"{task.household_id.replace(':', '_')}.json").read_text(encoding="utf-8"))
+        queue = json.loads((task_dir / "queue.json").read_text(encoding="utf-8"))
+        audit = [json.loads(line) for line in (task_dir / "audit.jsonl").read_text(encoding="utf-8").splitlines()
+                 if line.strip()]
+        store = DataStore.load(fixtures.make(Path(tempfile.mkdtemp(prefix="regrade-")) / "data", task.fixture))
+        state = {**record, "messages": messages_from_dict(record.get("messages", []))}
+        passed, detail = task.check(Run(task.household_id, record.get("outcome", {}), state, queue, audit, store))
+        out["tasks"].append({"task": task.name, "passed": passed, "detail": detail,
+                             "was": stored["passed"], "changed": passed != stored["passed"]})
+    out["passed"] = sum(t["passed"] for t in out["tasks"])
+    out["was"] = sum(t["was"] for t in out["tasks"])
+    name = f"regrade-{(out['commit'] or 'unknown')[:7]}.json"
+    (run_dir / name).write_text(json.dumps(out, indent=2), encoding="utf-8")
+    return out
+
+
 def table(results: dict) -> str:
     meta = results["meta"]
     lines = [START,
@@ -126,6 +156,14 @@ def update_evals(results: dict) -> None:
 
 
 async def run_all(args) -> int:
+    if args.regrade:
+        for run_dir in args.regrade:
+            r = regrade(Path(run_dir))
+            flips = [f"{t['task']} {'PASS' if t['was'] else 'FAIL'}->{'PASS' if t['passed'] else 'FAIL'}"
+                     for t in r["tasks"] if t["changed"]]
+            print(f"{r['run']}: {r['was']} -> {r['passed']} of {len(r['tasks'])}"
+                  + (f" ({', '.join(flips)})" if flips else ""))
+        return 0
     chosen = [t for t in TASKS if not args.task or t.name in args.task]
     if not chosen:
         print(f"no such task; choose from {', '.join(t.name for t in TASKS)}", file=sys.stderr)

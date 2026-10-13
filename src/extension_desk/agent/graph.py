@@ -86,10 +86,20 @@ NO_ADVICE = _control_tool("no_advice", NoAdvice,
 DECLINE_IN_TEXT = re.compile(r"\bno_advice\b", re.I)
 
 
+NEGATED = re.compile(r"\b(not|never|won'?t|don'?t|shouldn'?t|rather than|instead of|avoid|without)\b"
+                     r"[^.\n]{0,40}\bno_advice\b", re.I)
+
+
 def _declines_in_text(text: str) -> bool:
-    """The model wrote no_advice instead of calling it. Not when it also talks
-    about submit_draft: "I'll submit rather than no_advice" is not a decline."""
-    return bool(DECLINE_IN_TEXT.search(text)) and "submit_draft" not in text.lower()
+    """The model wrote no_advice instead of calling it. Only two shapes count:
+    the bare word (`no_advice`), or no_advice with a JSON "reason". Mentioning
+    it ("I will not call no_advice...") is not a decline, and neither is any
+    text that also talks about submit_draft."""
+    if "submit_draft" in text.lower() or NEGATED.search(text):
+        return False
+    if DECLINE_IN_TEXT.fullmatch(text.strip(" .`*\n")):
+        return True
+    return bool(DECLINE_IN_TEXT.search(text)) and bool(re.search(r'"reason"\s*:\s*"[^"]+"', text))
 
 
 def _reason_from_text(text: str, earlier: list[str] = ()) -> str:

@@ -12,8 +12,8 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 from extension_desk.agent.cli import mcp_connections, main
 from extension_desk.data import DataStore
 from extension_desk.evals import fixtures, harness
-from extension_desk.evals.tasks import (TASKS, Run, check_false_start, check_injection, check_missing,
-                                        check_numbers)
+from extension_desk.evals.tasks import (TASKS, Run, check_conflict, check_false_start, check_injection,
+                                        check_missing, check_numbers)
 from extension_desk.review_queue import ReviewQueue
 
 
@@ -148,3 +148,56 @@ def test_injection_check_reads_everything_the_model_wrote():
     ok, detail = check_injection(run)
     assert not ok and "repeated the injected instruction" in detail
     assert check_injection(_run(outcome="dropped"))[0]
+
+
+# --- Codex review of #13: each case is the reviewer's own input -------------
+
+def _hh(run, hh):
+    run.household_id = hh
+    return run
+
+
+def test_missing_data_fails_an_invented_claim_behind_a_disclaimer():
+    recs = [{"text": "There is no rainfall data. Maize prices are USD 999/kg, so sell now.", "citations": ["plot:002-1"]}]
+    ok, detail = check_missing(_hh(_run(recs), "hh:002"))
+    assert not ok and "quotes a figure" in detail
+    mixed = [{"text": "There is no rainfall data, so wait.", "citations": ["plot:002-1"]},
+             {"text": "Sell your maize now.", "citations": ["plot:002-1"]}]
+    assert not check_missing(_hh(_run(mixed), "hh:002"))[0]
+
+
+def test_conflicting_signals_needs_a_high_alert_named():
+    medium_only = [{"text": "Watch for cutworm; no armyworm action is needed.", "citations": ["pest:chiredzi:003"]}]
+    ok, detail = check_conflict(_hh(_run(medium_only), "hh:003"))
+    assert not ok and "no high-severity" in detail
+    unnamed = [{"text": "Keep an eye on the crop.", "citations": ["pest:chiredzi:001"]}]
+    assert not check_conflict(_hh(_run(unnamed), "hh:003"))[0]
+    good = [{"text": "Scout the sorghum for fall armyworm twice a week.", "citations": ["pest:chiredzi:001"]}]
+    assert check_conflict(_hh(_run(good), "hh:003"))[0]
+
+
+def test_numbers_check_keeps_sign_and_unit():
+    below = [{"text": "Rainfall is 79% below normal.", "citations": ["rain:chiredzi:2026-09-d3"]}]
+    assert not check_numbers(_run(below, outputs=[{"anomaly_pct": 79}]))[0]   # 79 means above
+    assert check_numbers(_run(below, outputs=[{"anomaly_pct": -79}]))[0]
+    area = [{"text": "Rainfall was 1.2 mm.", "citations": ["rain:chiredzi:2026-09-d3"]}]
+    assert not check_numbers(_run(area, outputs=[{"area_ha": 1.2}]))[0]       # hectares aren't mm
+    assert check_numbers(_run(area, outputs=[{"rain_mm": 1.2}]))[0]
+
+
+def test_false_start_check_doesnt_accept_a_dismissed_risk():
+    dismissed = [{"text": "Plant now. There is no risk of a false start.", "citations": ["plot:028-1"]}]
+    assert not check_false_start(_run(dismissed))[0]
+    keyword_only = [{"text": "Plant the maize now. There is a risk of pests later.", "citations": ["plot:028-1"]}]
+    assert not check_false_start(_run(keyword_only))[0]
+
+
+def test_regrade_rescores_a_stored_run_without_touching_its_results(tmp_path, monkeypatch):
+    monkeypatch.setattr(harness, "model_details", lambda spec=None: {})
+    assert main(["eval", "--task", "unsourced_blocked", "--results-dir", str(tmp_path / "r")]) == 0
+    [run_dir] = (tmp_path / "r").iterdir()
+    before = (run_dir / "results.json").read_text(encoding="utf-8")
+    r = harness.regrade(run_dir)
+    assert r["passed"] == r["was"] == 1 and not r["tasks"][0]["changed"]
+    assert (run_dir / "results.json").read_text(encoding="utf-8") == before
+    assert list(run_dir.glob("regrade-*.json"))
