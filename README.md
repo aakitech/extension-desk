@@ -16,9 +16,17 @@ Built for the [Agentic AI for Africa Innovation Challenge](https://agentic-afric
 ## Run it
 
 ```bash
-# one command; TODO: finalise once the entrypoint exists
 uv run extension-desk demo
 ```
+
+This runs one backlog pass over the Chiredzi pilot district. For each of three households, the agent gathers evidence through our MCP server, drafts an advisory with citations, and stops at the officer approval gate. You answer as the officer (approve, edit or reject). Nothing is sent to any household. Decisions go to `state/audit.jsonl`.
+
+Before you run it:
+
+- [uv](https://docs.astral.sh/uv/)
+- [Ollama](https://ollama.com) with the default open-weights model: `ollama pull qwen2.5:7b`. If Ollama isn't running, the demo says so and exits.
+
+Options: `--district mangwe`, `--limit N`, `--officer NAME`, `--decide approve|reject` (non-interactive), `--model anthropic:<model>` (hosted; run `uv sync --extra hosted` and set `ANTHROPIC_API_KEY`).
 
 ## Data
 
