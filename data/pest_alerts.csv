@@ -1,0 +1,7 @@
+record_id,district,reported_on,pest,crops_affected,severity,source
+pest:chiredzi:001,chiredzi,2026-09-29,fall armyworm,sorghum,high,synthetic (scripts/generate_synthetic.py)
+pest:chiredzi:002,chiredzi,2026-09-15,fall armyworm,sorghum,high,synthetic (scripts/generate_synthetic.py)
+pest:chiredzi:003,chiredzi,2026-09-25,cutworm,sorghum,medium,synthetic (scripts/generate_synthetic.py)
+pest:mangwe:001,mangwe,2026-09-28,cutworm,maize;sorghum,low,synthetic (scripts/generate_synthetic.py)
+pest:mangwe:002,mangwe,2026-10-05,fall armyworm,maize;sorghum,medium,synthetic (scripts/generate_synthetic.py)
+pest:mangwe:003,mangwe,2026-09-25,fall armyworm,maize;sorghum,low,synthetic (scripts/generate_synthetic.py)
