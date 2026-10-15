@@ -42,8 +42,8 @@ These observations come from the transcripts:
 - **It sends arguments the tools don't take** (`includes_preliminary: true` on `get_rainfall`). The server ignored them.
 - **It gets details wrong.** The hh:003 draft calls cutworm "high severity"; the cited record says medium. It also tells a household with nothing harvested yet to "consider selling sorghum when prices are favorable".
 - **Its drafts are generic.** hh:003's draft packs three pieces of advice into one sentence. hh:018's final draft is one line: "Monitor rainfall and irrigation, keep an eye on market trends, and manage the cowpeas and groundnuts plots."
-- **It responds to the guards.** Each refusal message names the bad citation and why. On hh:018 the model fixed the exact problem on the next turn.
+- **It responds to the guards.** Each refusal message names the bad citation and why. On hh:018 the model named the exact problem on the next turn, though it took three more turns (revised prose, a nudge, another plot lookup) before it resubmitted a draft that passed.
 
 ## Not compared
 
-No hosted-model run was made, so this run says nothing about how a hosted model would differ. The earlier interactive run on the same model and data (12 Oct, before transcripts were recorded) gave an identical hh:003 draft, as expected at temperature 0.
+No hosted-model run was made, so this run says nothing about how a hosted model would differ. An earlier interactive run on the same model and data (12 Oct, before transcripts were recorded) appeared to give the same hh:003 draft. That is an unrecorded observation; nothing in this record supports it. Later eval runs showed the model is not deterministic even at temperature 0.
