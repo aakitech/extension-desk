@@ -1,0 +1,55 @@
+{
+  "started_at": "2026-10-12T21:55:59+00:00",
+  "command": [
+    "<repo>\\.venv\\Scripts\\extension-desk",
+    "demo",
+    "--limit",
+    "3",
+    "--decide",
+    "reject",
+    "--officer",
+    "automated run (no human review)"
+  ],
+  "commit": "8a33b603b389203cdea7272ce1166e2a4950ee86",
+  "model": "ollama:qwen2.5:7b",
+  "model_details": {
+    "provider": "ollama",
+    "name": "qwen2.5:7b",
+    "digest": "845dbda0ea48ed749caafd9e6037047aa19acfcfd82e704d7ca97d631a0b697e",
+    "modified_at": "2026-10-12T23:19:26.3029553+02:00",
+    "size": 4683087332,
+    "parent_model": "",
+    "format": "gguf",
+    "family": "qwen2",
+    "families": [
+      "qwen2"
+    ],
+    "parameter_size": "7.6B",
+    "quantization_level": "Q4_K_M",
+    "ollama_version": "0.40.3"
+  },
+  "district": "chiredzi",
+  "today": "2026-10-12",
+  "backlog": [
+    "hh:003",
+    "hh:018",
+    "hh:016"
+  ],
+  "decide": "reject",
+  "officer": "automated run (no human review)",
+  "households": {
+    "hh:003": {
+      "status": "rejected",
+      "seconds": 71.5
+    },
+    "hh:018": {
+      "status": "rejected",
+      "seconds": 108.5
+    },
+    "hh:016": {
+      "status": "dropped",
+      "seconds": 56.6
+    }
+  },
+  "finished_at": "2026-10-12T21:59:56+00:00"
+}

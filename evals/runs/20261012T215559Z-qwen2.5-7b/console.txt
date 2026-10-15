@@ -1,0 +1,58 @@
+Model: ollama:qwen2.5:7b. District: chiredzi. Today: 2026-10-12 (time server). Backlog: hh:003, hh:018, hh:016
+Nothing is sent to any household. Approved drafts wait in the review queue.
+
+=== hh:003 ===
+
+--- Draft advisory:1 for hh:003 (pending officer approval) ---
+1. Monitor pest activity, particularly fall armyworm and cutworm, which have been reported as high severity. Ensure the irrigation system is functioning properly and consider adjusting the irrigation schedule if necessary. Continue to monitor market prices and consider selling sorghum when prices are favorable.
+   cites: hh:003, plot:003-1, plot:003-2, pest:chiredzi:001, pest:chiredzi:002, pest:chiredzi:003, price:sorghum:rutenga:2026-09
+Sources:
+  hh:003: {"district": "chiredzi", "ward": "18", "members": "4", "has_phone": "True", "last_officer_visit": "2026-04-06"}
+      source: synthetic (scripts/generate_synthetic.py)
+  plot:003-1: {"household_id": "hh:003", "crop": "sorghum", "maturity": "medium", "area_ha": "1.6", "soil": "sandy loam", "irrigated": "False", "planted_on": ""}
+      source: synthetic (scripts/generate_synthetic.py)
+  plot:003-2: {"household_id": "hh:003", "crop": "sorghum", "maturity": "medium", "area_ha": "1.5", "soil": "sandy loam", "irrigated": "True", "planted_on": "2026-09-07"}
+      source: synthetic (scripts/generate_synthetic.py)
+  pest:chiredzi:001: {"district": "chiredzi", "reported_on": "2026-09-29", "pest": "fall armyworm", "crops_affected": "sorghum", "severity": "high"}
+      source: synthetic (scripts/generate_synthetic.py)
+  pest:chiredzi:002: {"district": "chiredzi", "reported_on": "2026-09-15", "pest": "fall armyworm", "crops_affected": "sorghum", "severity": "high"}
+      source: synthetic (scripts/generate_synthetic.py)
+  pest:chiredzi:003: {"district": "chiredzi", "reported_on": "2026-09-25", "pest": "cutworm", "crops_affected": "sorghum", "severity": "medium"}
+      source: synthetic (scripts/generate_synthetic.py)
+  price:sorghum:rutenga:2026-09: {"district": "chiredzi", "market": "Rutenga", "commodity": "Sorghum", "unit": "KG", "month": "2026-09", "price_usd": "0.335", "price_flag": "aggregate"}
+      source: FEWS NET Data Warehouse (dataseries 6973592, Mwenezi, Rutenga market (Open market)), monthly aggregate of weekly retail prices; ZAR 95.00 per 17.5 kg, converted by FEWS NET at 0.06178 USD/ZAR
+Decision: reject (fixed by --decide; logged as answered_via=flag, not a review)
+Outcome: rejected, advisory:1 by automated run (no human review). Not sent.
+
+=== hh:018 ===
+
+--- Draft advisory:2 for hh:018 (pending officer approval) ---
+1. Monitor rainfall and irrigation, keep an eye on market trends, and manage the cowpeas and groundnuts plots.
+   cites: rain:chiredzi:2026-09-d1, rain:chiredzi:2026-09-d2, rain:chiredzi:2026-09-d3, price:cowpeas:rutenga:2026-09, plot:018-1, plot:018-2, plot:018-3
+Sources:
+  rain:chiredzi:2026-09-d1: {"district": "chiredzi", "dekad_start": "2026-09-01", "dekad_end": "2026-09-10", "rain_mm": "7.0", "normal_mm": "3.8", "departure_mm": "3.2", "anomaly_pct": "", "normal_years": "30"}
+      source: CHIRPS v3.0 preliminary (Climate Hazards Center, UCSB), 0.05-degree pixel; final not yet published; normal = 1991-2020 CHIRPS v3.0 final mean
+  rain:chiredzi:2026-09-d2: {"district": "chiredzi", "dekad_start": "2026-09-11", "dekad_end": "2026-09-20", "rain_mm": "2.6", "normal_mm": "3.5", "departure_mm": "-0.9", "anomaly_pct": "", "normal_years": "30"}
+      source: CHIRPS v3.0 preliminary (Climate Hazards Center, UCSB), 0.05-degree pixel; final not yet published; normal = 1991-2020 CHIRPS v3.0 final mean
+  rain:chiredzi:2026-09-d3: {"district": "chiredzi", "dekad_start": "2026-09-21", "dekad_end": "2026-09-30", "rain_mm": "12.7", "normal_mm": "7.1", "departure_mm": "5.6", "anomaly_pct": "79", "normal_years": "30"}
+      source: CHIRPS v3.0 preliminary (Climate Hazards Center, UCSB), 0.05-degree pixel; final not yet published; normal = 1991-2020 CHIRPS v3.0 final mean
+  price:cowpeas:rutenga:2026-09: {"district": "chiredzi", "market": "Rutenga", "commodity": "Cowpeas", "unit": "KG", "month": "2026-09", "price_usd": "0.635", "price_flag": "aggregate"}
+      source: FEWS NET Data Warehouse (dataseries 6973584, Mwenezi, Rutenga market (Open market)), monthly aggregate of weekly retail prices; ZAR 46.25 per 4.5_kg, converted by FEWS NET at 0.06178 USD/ZAR
+  plot:018-1: {"household_id": "hh:018", "crop": "cowpeas", "maturity": "short", "area_ha": "0.5", "soil": "clay loam", "irrigated": "True", "planted_on": "2026-09-22"}
+      source: synthetic (scripts/generate_synthetic.py)
+  plot:018-2: {"household_id": "hh:018", "crop": "groundnuts", "maturity": "short", "area_ha": "0.4", "soil": "clay loam", "irrigated": "False", "planted_on": ""}
+      source: synthetic (scripts/generate_synthetic.py)
+  plot:018-3: {"household_id": "hh:018", "crop": "cowpeas", "maturity": "short", "area_ha": "1.8", "soil": "sandy loam", "irrigated": "False", "planted_on": ""}
+      source: synthetic (scripts/generate_synthetic.py)
+Decision: reject (fixed by --decide; logged as answered_via=flag, not a review)
+Outcome: rejected, advisory:2 by automated run (no human review). Not sent.
+
+=== hh:016 ===
+Outcome: dropped (Draft rejected by the citation check:
+- recommendation 4 has no citations
+Fix it using only record IDs returned by the tools, or call no_advice.). Not sent.
+
+Review queue: <scratch>\queue.sqlite3
+Audit log: <scratch>\audit.jsonl
+Transcript: <scratch>\runs\20261012T215559Z
+exit=0
