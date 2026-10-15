@@ -1,0 +1,23 @@
+{
+  "started_at": "2026-10-12T23:59:50+00:00",
+  "command": [
+    "extension-desk",
+    "eval",
+    "--update-evals"
+  ],
+  "commit": "20bf2c150459812b5158ef27761ab7820461ccf1",
+  "task": "conflicting_signals",
+  "covers": "conflicting signals (rain fine, pest high)",
+  "fixture": {
+    "change": null,
+    "records": []
+  },
+  "model": "real",
+  "households": {
+    "hh:003": {
+      "status": "rejected",
+      "seconds": 70.8
+    }
+  },
+  "finished_at": "2026-10-13T00:01:01+00:00"
+}

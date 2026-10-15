@@ -1,0 +1,20 @@
+{
+  "started_at": "2026-10-12T23:14:26+00:00",
+  "command": [
+    "extension-desk",
+    "eval",
+    "--update-evals"
+  ],
+  "commit": "141f604cc60e444536bdb2a5b842cda63cc23329",
+  "task": "missing_data",
+  "covers": "missing data: say it can't advise, don't invent",
+  "fixture": true,
+  "model": "real",
+  "households": {
+    "hh:002": {
+      "status": "no_advice",
+      "seconds": 23.5
+    }
+  },
+  "finished_at": "2026-10-12T23:14:50+00:00"
+}

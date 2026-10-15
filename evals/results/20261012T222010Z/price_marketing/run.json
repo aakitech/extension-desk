@@ -1,0 +1,20 @@
+{
+  "started_at": "2026-10-12T22:22:09+00:00",
+  "command": [
+    "extension-desk",
+    "eval",
+    "--update-evals"
+  ],
+  "commit": "14055904306984564f8c5a868f9eb2b0caca1afc",
+  "task": "price_marketing",
+  "covers": "price-driven marketing advice",
+  "fixture": false,
+  "model": "real",
+  "households": {
+    "hh:016": {
+      "status": "no_advice",
+      "seconds": 43.4
+    }
+  },
+  "finished_at": "2026-10-12T22:22:53+00:00"
+}

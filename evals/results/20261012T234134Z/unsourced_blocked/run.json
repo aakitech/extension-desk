@@ -1,0 +1,22 @@
+{
+  "started_at": "2026-10-12T23:46:44+00:00",
+  "command": [
+    "extension-desk",
+    "eval"
+  ],
+  "commit": "20bf2c150459812b5158ef27761ab7820461ccf1",
+  "task": "unsourced_blocked",
+  "covers": "unsourced recommendation attempted: must be blocked",
+  "fixture": {
+    "change": null,
+    "records": []
+  },
+  "model": "scripted",
+  "households": {
+    "hh:004": {
+      "status": "dropped",
+      "seconds": 1.1
+    }
+  },
+  "finished_at": "2026-10-12T23:46:45+00:00"
+}

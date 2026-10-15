@@ -1,0 +1,23 @@
+{
+  "started_at": "2026-10-13T00:03:09+00:00",
+  "command": [
+    "extension-desk",
+    "eval",
+    "--update-evals"
+  ],
+  "commit": "20bf2c150459812b5158ef27761ab7820461ccf1",
+  "task": "unknown_household",
+  "covers": "household that doesn't exist",
+  "fixture": {
+    "change": null,
+    "records": []
+  },
+  "model": "real",
+  "households": {
+    "hh:999": {
+      "status": "no_advice",
+      "seconds": 17.8
+    }
+  },
+  "finished_at": "2026-10-13T00:03:27+00:00"
+}

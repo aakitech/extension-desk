@@ -497,3 +497,90 @@ def test_demo_writes_a_transcript_of_what_the_model_did(monkeypatch, tmp_path):
     assert calls == ["get_plot_records", "get_rainfall", "get_pest_alerts", "submit_draft"]
     assert record["gate"][0]["answer"]["answered_via"] == "flag"
     assert record["outcome"]["status"] == "rejected" and RAIN in record["seen"]
+
+
+# --- eval run 1 findings ----------------------------------------------------
+
+def test_no_advice_written_as_text_ends_the_run_as_no_advice(env):
+    # Run 1 (missing_data): the model wrote "no_advice" as text five times and
+    # was dropped after MAX_TURNS without ever declining.
+    app, queue, audit, new_items = env
+    text = AIMessage('No_advice will be submitted.\n```json\n{"reason": "No rainfall or price records."}\n```')
+    graph, model = app(GATHER[0], text)
+    result, pauses = run(graph)
+    assert result["outcome"]["status"] == "no_advice" and result["outcome"]["declined_via"] == "text"
+    assert result["outcome"]["reason"] == "No rainfall or price records."
+    assert model.calls == 2 and new_items() == []
+    [entry] = audit.entries()
+    assert entry["event"] == "no_advice" and entry["outputs"]["declined_via"] == "text"
+
+
+def test_submit_draft_written_as_text_is_never_acted_on(env):
+    app, queue, audit, new_items = env
+    text = AIMessage('submit_draft {"recommendations": [{"text": "Spray now", "citations": ["pest:chiredzi:001"]}]}')
+    graph, model = app(*GATHER, text)
+    result, pauses = run(graph)
+    assert pauses == [] and new_items() == [] and result["outcome"]["status"] == "dropped"
+    assert any("plain text, which does nothing" in str(m.content) for m in result["messages"])
+
+
+def test_ollama_model_gets_a_context_window_bigger_than_the_default(monkeypatch):
+    from extension_desk.agent import models
+    monkeypatch.setattr(models, "_check_ollama", lambda name: None)
+    assert models.make_model("ollama:qwen2.5:7b").num_ctx == models.NUM_CTX >= 16384
+
+
+def test_text_that_also_mentions_submit_draft_is_not_a_decline(env):
+    app, queue, audit, new_items = env
+    text = AIMessage("I'll call submit_draft rather than no_advice. 1. Plant now.")
+    graph, model = app(GATHER[0], text, *GATHER[1:], GOOD)
+    result, pauses = run(graph, [{"decision": "reject", "officer": "T. Moyo"}])
+    assert len(pauses) == 1 and result["outcome"]["status"] == "rejected"
+
+
+def test_bare_no_advice_text_takes_the_earlier_explanation_as_its_reason(env):
+    app, queue, audit, new_items = env
+    why = AIMessage("There are no rainfall records, no prices and no pest alerts for this district.")
+    graph, model = app(GATHER[0], why, AIMessage("no_advice"))
+    result, pauses = run(graph)
+    assert result["outcome"]["status"] == "no_advice"
+    assert result["outcome"]["reason"].startswith("There are no rainfall records")
+
+
+def test_drop_reason_is_text_not_a_message_repr(env):
+    app, queue, audit, new_items = env
+    wrong = submit(("Rotate with groundnuts.", ["plot:002-1"]))
+    graph, _ = app(call("get_plot_records", {"district": "chiredzi"}), wrong, wrong)
+    result, _ = run(graph)
+    assert result["outcome"]["reason"].startswith("The review queue refused the draft")
+    assert "additional_kwargs" not in result["outcome"]["reason"]
+
+
+def test_text_that_mentions_no_advice_without_declining_carries_on(env):
+    # Codex's case: this ended the run as no_advice before any evidence.
+    app, queue, audit, new_items = env
+    text = AIMessage("I will not call no_advice because the records support advice. I should gather rainfall next.")
+    graph, model = app(GATHER[0], text, *GATHER[1:], GOOD)
+    result, pauses = run(graph, [{"decision": "reject", "officer": "T. Moyo"}])
+    assert len(pauses) == 1 and result["outcome"]["status"] == "rejected"
+
+
+@pytest.mark.parametrize("text, declines", [
+    ("no_advice", True),
+    ("`no_advice`.", True),
+    ('No_advice will be submitted.\n```json\n{"reason": "No rainfall records."}\n```', True),
+    ("Rather than no_advice, here is my plan.", False),
+    ("I could use no_advice, but the data is fine.", False),
+    ("I won't use no_advice.", False),
+])
+def test_what_counts_as_a_text_decline(text, declines):
+    from extension_desk.agent.graph import _declines_in_text
+    assert _declines_in_text(text) is declines
+
+
+def test_runs_started_in_the_same_second_get_separate_directories(tmp_path):
+    # Munashe's review note on #11: the second run used to fail on mkdir.
+    from extension_desk.agent.transcript import unique_dir
+    first = unique_dir(tmp_path, "20261013T090000Z")
+    second = unique_dir(tmp_path, "20261013T090000Z")
+    assert first.name == "20261013T090000Z" and second.name == "20261013T090000Z-2"

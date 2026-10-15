@@ -1,0 +1,54 @@
+[
+  {
+    "item_id": "advisory:1",
+    "kind": "advisory",
+    "household_id": "hh:028",
+    "status": "rejected",
+    "payload": {
+      "recommendations": [
+        {
+          "text": "Monitor pest activity, especially fall armyworm, which has been reported as medium severity in your district.",
+          "citations": [
+            "pest:mangwe:001",
+            "pest:mangwe:002",
+            "pest:mangwe:003"
+          ]
+        },
+        {
+          "text": "Stay informed about market prices for sorghum, which have remained stable at 0.865 USD/kg.",
+          "citations": [
+            "price:sorghum:gwanda:2026-09"
+          ]
+        }
+      ]
+    },
+    "citations": [
+      "pest:mangwe:001",
+      "pest:mangwe:002",
+      "pest:mangwe:003",
+      "price:sorghum:gwanda:2026-09"
+    ],
+    "created_by": "draft_advisory",
+    "created_at": "2026-10-12T22:13:43+00:00",
+    "decided_by": "eval harness (no human review)",
+    "decided_at": "2026-10-12T22:13:43+00:00",
+    "final_payload": {
+      "recommendations": [
+        {
+          "text": "Monitor pest activity, especially fall armyworm, which has been reported as medium severity in your district.",
+          "citations": [
+            "pest:mangwe:001",
+            "pest:mangwe:002",
+            "pest:mangwe:003"
+          ]
+        },
+        {
+          "text": "Stay informed about market prices for sorghum, which have remained stable at 0.865 USD/kg.",
+          "citations": [
+            "price:sorghum:gwanda:2026-09"
+          ]
+        }
+      ]
+    }
+  }
+]

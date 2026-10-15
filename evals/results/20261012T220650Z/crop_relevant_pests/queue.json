@@ -1,0 +1,70 @@
+[
+  {
+    "item_id": "advisory:1",
+    "kind": "advisory",
+    "household_id": "hh:018",
+    "status": "rejected",
+    "payload": {
+      "recommendations": [
+        {
+          "text": "Monitor rainfall and irrigation to avoid waterlogging and ensure optimal growth of crops like cowpeas and groundnuts.",
+          "citations": [
+            "rain:chiredzi:2026-09-d1",
+            "rain:chiredzi:2026-09-d2",
+            "rain:chiredzi:2026-09-d3"
+          ]
+        },
+        {
+          "text": "Monitor the stable price of cowpeas to maximize income when selling.",
+          "citations": [
+            "price:cowpeas:rutenga:2026-09"
+          ]
+        },
+        {
+          "text": "Monitor the non-irrigated plot (plot:018-3) for additional water needs to ensure proper growth of cowpeas.",
+          "citations": [
+            "plot:018-1",
+            "plot:018-3"
+          ]
+        }
+      ]
+    },
+    "citations": [
+      "rain:chiredzi:2026-09-d1",
+      "rain:chiredzi:2026-09-d2",
+      "rain:chiredzi:2026-09-d3",
+      "price:cowpeas:rutenga:2026-09",
+      "plot:018-1",
+      "plot:018-3"
+    ],
+    "created_by": "draft_advisory",
+    "created_at": "2026-10-12T22:16:04+00:00",
+    "decided_by": "eval harness (no human review)",
+    "decided_at": "2026-10-12T22:16:04+00:00",
+    "final_payload": {
+      "recommendations": [
+        {
+          "text": "Monitor rainfall and irrigation to avoid waterlogging and ensure optimal growth of crops like cowpeas and groundnuts.",
+          "citations": [
+            "rain:chiredzi:2026-09-d1",
+            "rain:chiredzi:2026-09-d2",
+            "rain:chiredzi:2026-09-d3"
+          ]
+        },
+        {
+          "text": "Monitor the stable price of cowpeas to maximize income when selling.",
+          "citations": [
+            "price:cowpeas:rutenga:2026-09"
+          ]
+        },
+        {
+          "text": "Monitor the non-irrigated plot (plot:018-3) for additional water needs to ensure proper growth of cowpeas.",
+          "citations": [
+            "plot:018-1",
+            "plot:018-3"
+          ]
+        }
+      ]
+    }
+  }
+]

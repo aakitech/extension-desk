@@ -1,0 +1,20 @@
+{
+  "started_at": "2026-10-12T22:28:33+00:00",
+  "command": [
+    "extension-desk",
+    "eval",
+    "--update-evals"
+  ],
+  "commit": "14055904306984564f8c5a868f9eb2b0caca1afc",
+  "task": "false_start",
+  "covers": "possible false start: heavy preliminary rain after a dry season",
+  "fixture": false,
+  "model": "real",
+  "households": {
+    "hh:028": {
+      "status": "dropped",
+      "seconds": 2055.2
+    }
+  },
+  "finished_at": "2026-10-12T23:02:48+00:00"
+}

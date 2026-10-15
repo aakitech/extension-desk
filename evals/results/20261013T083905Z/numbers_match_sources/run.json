@@ -1,0 +1,23 @@
+{
+  "started_at": "2026-10-13T08:49:46+00:00",
+  "command": [
+    "extension-desk",
+    "eval",
+    "--update-evals"
+  ],
+  "commit": "4c397bfe4997e6e685c2720fcabd6a953dec0c73-dirty",
+  "task": "numbers_match_sources",
+  "covers": "quoted figures exist in the data the tools returned",
+  "fixture": {
+    "change": null,
+    "records": []
+  },
+  "model": "real",
+  "households": {
+    "hh:018": {
+      "status": "dropped",
+      "seconds": 127.1
+    }
+  },
+  "finished_at": "2026-10-13T08:51:54+00:00"
+}

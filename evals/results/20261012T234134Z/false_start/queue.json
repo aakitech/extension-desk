@@ -1,0 +1,125 @@
+[
+  {
+    "item_id": "advisory:1",
+    "kind": "advisory",
+    "household_id": "hh:028",
+    "status": "rejected",
+    "payload": {
+      "recommendations": [
+        {
+          "text": "Monitor rainfall and soil moisture levels, especially with the recent high rainfall, to avoid waterlogging.",
+          "citations": [
+            "rain:mangwe:2026-08-d1",
+            "rain:mangwe:2026-08-d2",
+            "rain:mangwe:2026-08-d3",
+            "rain:mangwe:2026-09-d1",
+            "rain:mangwe:2026-09-d2",
+            "rain:mangwe:2026-09-d3"
+          ]
+        },
+        {
+          "text": "Consider selling sorghum at current prices or storing it for a better price in the future.",
+          "citations": [
+            "price:sorghum:gwanda:2026-01",
+            "price:sorghum:gwanda:2026-02",
+            "price:sorghum:gwanda:2026-03",
+            "price:sorghum:gwanda:2026-04",
+            "price:sorghum:gwanda:2026-05",
+            "price:sorghum:gwanda:2026-06",
+            "price:sorghum:gwanda:2026-07",
+            "price:sorghum:gwanda:2026-08",
+            "price:sorghum:gwanda:2026-09"
+          ]
+        },
+        {
+          "text": "Be vigilant for cutworm and fall armyworm, especially the latter, and take preventive measures.",
+          "citations": [
+            "pest:mangwe:001",
+            "pest:mangwe:002",
+            "pest:mangwe:003"
+          ]
+        },
+        {
+          "text": "Consider crop rotation and diversification to mitigate risks.",
+          "citations": [
+            "plot:028-1",
+            "plot:028-2",
+            "plot:028-3"
+          ]
+        }
+      ]
+    },
+    "citations": [
+      "rain:mangwe:2026-08-d1",
+      "rain:mangwe:2026-08-d2",
+      "rain:mangwe:2026-08-d3",
+      "rain:mangwe:2026-09-d1",
+      "rain:mangwe:2026-09-d2",
+      "rain:mangwe:2026-09-d3",
+      "price:sorghum:gwanda:2026-01",
+      "price:sorghum:gwanda:2026-02",
+      "price:sorghum:gwanda:2026-03",
+      "price:sorghum:gwanda:2026-04",
+      "price:sorghum:gwanda:2026-05",
+      "price:sorghum:gwanda:2026-06",
+      "price:sorghum:gwanda:2026-07",
+      "price:sorghum:gwanda:2026-08",
+      "price:sorghum:gwanda:2026-09",
+      "pest:mangwe:001",
+      "pest:mangwe:002",
+      "pest:mangwe:003",
+      "plot:028-1",
+      "plot:028-2",
+      "plot:028-3"
+    ],
+    "created_by": "draft_advisory",
+    "created_at": "2026-10-12T23:52:10+00:00",
+    "decided_by": "eval harness (no human review)",
+    "decided_at": "2026-10-12T23:52:10+00:00",
+    "final_payload": {
+      "recommendations": [
+        {
+          "text": "Monitor rainfall and soil moisture levels, especially with the recent high rainfall, to avoid waterlogging.",
+          "citations": [
+            "rain:mangwe:2026-08-d1",
+            "rain:mangwe:2026-08-d2",
+            "rain:mangwe:2026-08-d3",
+            "rain:mangwe:2026-09-d1",
+            "rain:mangwe:2026-09-d2",
+            "rain:mangwe:2026-09-d3"
+          ]
+        },
+        {
+          "text": "Consider selling sorghum at current prices or storing it for a better price in the future.",
+          "citations": [
+            "price:sorghum:gwanda:2026-01",
+            "price:sorghum:gwanda:2026-02",
+            "price:sorghum:gwanda:2026-03",
+            "price:sorghum:gwanda:2026-04",
+            "price:sorghum:gwanda:2026-05",
+            "price:sorghum:gwanda:2026-06",
+            "price:sorghum:gwanda:2026-07",
+            "price:sorghum:gwanda:2026-08",
+            "price:sorghum:gwanda:2026-09"
+          ]
+        },
+        {
+          "text": "Be vigilant for cutworm and fall armyworm, especially the latter, and take preventive measures.",
+          "citations": [
+            "pest:mangwe:001",
+            "pest:mangwe:002",
+            "pest:mangwe:003"
+          ]
+        },
+        {
+          "text": "Consider crop rotation and diversification to mitigate risks.",
+          "citations": [
+            "plot:028-1",
+            "plot:028-2",
+            "plot:028-3"
+          ]
+        }
+      ]
+    }
+  }
+]

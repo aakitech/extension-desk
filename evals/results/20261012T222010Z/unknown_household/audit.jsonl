@@ -1,0 +1,1 @@
+{"event": "no_advice", "household_id": "hh:999", "inputs": {"seen": []}, "outputs": {"declined_via": "text", "reason": "Insufficient data available to provide tailored recommendations for the household."}, "timestamp": "2026-10-12T22:27:35+00:00"}

@@ -10,6 +10,11 @@ import os
 import urllib.request
 
 DEFAULT_MODEL = "ollama:qwen2.5:7b"
+# Ollama's default context is 4096 tokens; past that it truncates the oldest
+# non-system messages (its prompt builder keeps system messages). Eval runs
+# reach ~3k tokens of messages plus the tool schemas sent on every call, so
+# 4096 is close to the edge.
+NUM_CTX = int(os.environ.get("EXTENSION_DESK_NUM_CTX", "16384"))
 OLLAMA_URL = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
 if "://" not in OLLAMA_URL:  # Ollama itself accepts host:port
     OLLAMA_URL = "http://" + OLLAMA_URL
@@ -28,7 +33,7 @@ def make_model(spec: str | None = None):
     if provider == "ollama":
         _check_ollama(name)
         from langchain_ollama import ChatOllama
-        return ChatOllama(model=name, base_url=OLLAMA_URL, temperature=0)
+        return ChatOllama(model=name, base_url=OLLAMA_URL, temperature=0, num_ctx=NUM_CTX)
     if provider == "anthropic":
         if not os.environ.get("ANTHROPIC_API_KEY"):
             raise ModelUnavailable("ANTHROPIC_API_KEY is not set")
@@ -46,6 +51,7 @@ def model_details(spec: str | None = None) -> dict:
     details = {"provider": provider, "name": name}
     if provider != "ollama":
         return details
+    details["num_ctx"] = NUM_CTX
     try:
         with urllib.request.urlopen(f"{OLLAMA_URL}/api/tags", timeout=5) as resp:
             for m in json.load(resp).get("models", []):

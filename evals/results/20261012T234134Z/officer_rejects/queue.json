@@ -1,0 +1,91 @@
+[
+  {
+    "item_id": "advisory:1",
+    "kind": "advisory",
+    "household_id": "hh:018",
+    "status": "rejected",
+    "payload": {
+      "recommendations": [
+        {
+          "text": "1. Monitor rainfall and irrigation: The recent rainfall in Chiredzi district has been above normal, with a significant anomaly in the last dekad. Given that the household has irrigated plots, ensure that irrigation is adjusted to match the current rainfall patterns. The total rainfall for the period from August 1 to September 30, 2026, was 38.1 mm, which is 97% above the normal of 19.3 mm. The last dekad (September 21-30) saw 12.7 mm of rain, which is 79% above normal. Continue to monitor rainfall and adjust irrigation as needed to avoid overwatering.",
+          "citations": [
+            "hh:018",
+            "plot:018-1",
+            "plot:018-2",
+            "plot:018-3",
+            "rain:chiredzi:2026-08-d1",
+            "rain:chiredzi:2026-09-d3",
+            "price:cowpeas:rutenga:2026-09"
+          ]
+        },
+        {
+          "text": "2. Price Monitoring for Cowpeas: The price of cowpeas in the Rutenga market is currently stable at 0.635 USD/kg. Given the recent favorable rainfall, the household should keep an eye on market prices and consider selling their cowpeas if prices increase. This will help in maximizing their income from the current crop.",
+          "citations": [
+            "hh:018",
+            "plot:018-1",
+            "plot:018-2",
+            "plot:018-3",
+            "price:cowpeas:rutenga:2026-09"
+          ]
+        },
+        {
+          "text": "3. Plot Management: The household has short-maturity cowpeas and groundnuts planted. The cowpeas in the clay loam plot are irrigated and have a maturity period, while the groundnuts in the sandy loam plot are not irrigated. Ensure that the groundnuts are watered appropriately, as they may require more water than the sandy soil can provide. Regularly check the progress of both crops and adjust management practices as needed.",
+          "citations": [
+            "hh:018",
+            "plot:018-1",
+            "plot:018-2",
+            "plot:018-3"
+          ]
+        }
+      ]
+    },
+    "citations": [
+      "hh:018",
+      "plot:018-1",
+      "plot:018-2",
+      "plot:018-3",
+      "rain:chiredzi:2026-08-d1",
+      "rain:chiredzi:2026-09-d3",
+      "price:cowpeas:rutenga:2026-09"
+    ],
+    "created_by": "draft_advisory",
+    "created_at": "2026-10-12T23:49:05+00:00",
+    "decided_by": "eval harness (no human review)",
+    "decided_at": "2026-10-12T23:49:05+00:00",
+    "final_payload": {
+      "recommendations": [
+        {
+          "text": "1. Monitor rainfall and irrigation: The recent rainfall in Chiredzi district has been above normal, with a significant anomaly in the last dekad. Given that the household has irrigated plots, ensure that irrigation is adjusted to match the current rainfall patterns. The total rainfall for the period from August 1 to September 30, 2026, was 38.1 mm, which is 97% above the normal of 19.3 mm. The last dekad (September 21-30) saw 12.7 mm of rain, which is 79% above normal. Continue to monitor rainfall and adjust irrigation as needed to avoid overwatering.",
+          "citations": [
+            "hh:018",
+            "plot:018-1",
+            "plot:018-2",
+            "plot:018-3",
+            "rain:chiredzi:2026-08-d1",
+            "rain:chiredzi:2026-09-d3",
+            "price:cowpeas:rutenga:2026-09"
+          ]
+        },
+        {
+          "text": "2. Price Monitoring for Cowpeas: The price of cowpeas in the Rutenga market is currently stable at 0.635 USD/kg. Given the recent favorable rainfall, the household should keep an eye on market prices and consider selling their cowpeas if prices increase. This will help in maximizing their income from the current crop.",
+          "citations": [
+            "hh:018",
+            "plot:018-1",
+            "plot:018-2",
+            "plot:018-3",
+            "price:cowpeas:rutenga:2026-09"
+          ]
+        },
+        {
+          "text": "3. Plot Management: The household has short-maturity cowpeas and groundnuts planted. The cowpeas in the clay loam plot are irrigated and have a maturity period, while the groundnuts in the sandy loam plot are not irrigated. Ensure that the groundnuts are watered appropriately, as they may require more water than the sandy soil can provide. Regularly check the progress of both crops and adjust management practices as needed.",
+          "citations": [
+            "hh:018",
+            "plot:018-1",
+            "plot:018-2",
+            "plot:018-3"
+          ]
+        }
+      ]
+    }
+  }
+]

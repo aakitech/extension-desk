@@ -1,0 +1,1 @@
+{"event": "draft_dropped", "household_id": "hh:003", "inputs": {"attempts": 0, "seen": ["hh:003", "plot:003-1", "plot:003-2", "price:sorghum:rutenga:2026-09", "pest:chiredzi:001", "pest:chiredzi:002", "pest:chiredzi:003"]}, "outputs": {"reason": "no draft after 10 model turns"}, "timestamp": "2026-10-12T22:13:12+00:00"}

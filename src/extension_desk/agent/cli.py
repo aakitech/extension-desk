@@ -22,18 +22,22 @@ from extension_desk.agent.audit import AuditLog
 from extension_desk.agent.graph import TIMEZONE, _text, build_graph
 from extension_desk.agent.models import ModelUnavailable, make_model, model_details, model_spec
 from extension_desk.agent.transcript import Transcript
-from extension_desk.data import DataStore
+from extension_desk.data import DATA_ENV, DataStore
 from extension_desk.districts import DISTRICTS
 from extension_desk.review_queue import ReviewQueue
 
 
-def mcp_connections(queue: ReviewQueue) -> dict:
-    """Our server, plus the reference `time` server we didn't write."""
+def mcp_connections(queue: ReviewQueue, data_dir=None) -> dict:
+    """Our server, plus the reference `time` server we didn't write.
+    `data_dir` points our server at an eval fixture instead of data/."""
+    env = {**os.environ, "EXTENSION_DESK_QUEUE": str(queue.path)}
+    if data_dir:
+        env[DATA_ENV] = str(data_dir)
     return {
         "extension_desk": {
             "transport": "stdio", "command": sys.executable,
             "args": ["-m", "extension_desk.mcp_server"],
-            "env": {**os.environ, "EXTENSION_DESK_QUEUE": str(queue.path)},
+            "env": env,
         },
         "time": {
             "transport": "stdio", "command": sys.executable,
@@ -167,7 +171,21 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--runs-dir", help="where run transcripts go (default state/runs)")
     d.add_argument("--decide", choices=["ask", "approve", "reject"], default="ask",
                    help="answer the gate interactively (default) or with a fixed decision")
+    e = sub.add_parser("eval", help="run the eval tasks against the configured model")
+    e.add_argument("--task", action="append", help="run only this task (repeatable)")
+    e.add_argument("--model", help="ollama:<model> or anthropic:<model> (default from EXTENSION_DESK_MODEL)")
+    e.add_argument("--results-dir", help="where results go (default evals/results)")
+    e.add_argument("--update-evals", action="store_true", help="rewrite the results table in EVALS.md")
+    e.add_argument("--regrade", nargs="+", metavar="RUN_DIR",
+                   help="re-score stored runs with today's checks (no model); writes regrade-<commit>.json")
     args = parser.parse_args(argv)
+    if args.command == "eval":
+        from extension_desk.evals.harness import run_all
+        try:
+            return asyncio.run(run_all(args))
+        except ModelUnavailable as err:
+            print(f"Can't start the model ({model_spec(args.model)}): {err}", file=sys.stderr)
+            return 2
     return asyncio.run(demo(args))
 
 
