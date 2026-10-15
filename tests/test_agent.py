@@ -601,3 +601,38 @@ def test_quiet_demo_prints_no_trace(monkeypatch, tmp_path, capsys):
     _demo_env(monkeypatch, tmp_path, [*GATHER, DISTRICT_ONLY])
     assert cli.main(["demo", "--limit", "1", "--decide", "reject", "--officer", "T. Moyo", "--quiet"]) == 0
     assert "model -> " not in capsys.readouterr().out
+
+
+def test_trace_shows_refusals_with_the_step_that_made_them(env, capsys):
+    app, queue, audit, new_items = env
+    bad = submit(("Plant now.", ["hh:001"]))
+    wrong = submit(("Rotate with groundnuts.", ["plot:002-1"]))
+    mixed = AIMessage("Checking rain first.", tool_calls=[
+        {"name": "get_rainfall", "args": {"district": "chiredzi"}, "id": "m1", "type": "tool_call"},
+        {"name": "submit_draft", "args": {"recommendations": []}, "id": "m2", "type": "tool_call"}])
+    graph, _ = app(call("get_plot_records", {"district": "chiredzi"}), mixed, bad, wrong)
+    outcome = asyncio.run(cli.run_household(graph, HH, lambda p: pytest.fail("reached the gate"), trace=True))
+    out = capsys.readouterr().out
+    assert outcome["status"] == "dropped"
+    assert "nudge !! Not run" in out and "check !! Not run" not in out
+    assert "model (text): Checking rain first." in out
+    assert "citation check !! Draft rejected" in out
+
+
+def test_gate_asks_again_through_the_streaming_loop(env):
+    app, queue, audit, new_items = env
+    graph, _ = app(*GATHER, GOOD)
+    answers = iter([{"decision": "approve", "officer": ""},
+                    {"decision": "edit", "officer": "T. Moyo", "edits": ["one"]},
+                    {"decision": "reject", "officer": "T. Moyo"}])
+    pauses = []
+
+    def answer(pause):
+        pauses.append(pause)
+        return next(answers)
+
+    outcome = asyncio.run(cli.run_household(graph, HH, answer))
+    assert outcome["status"] == "rejected" and len(pauses) == 3
+    assert "officer's name" in pauses[1]["error"] and "one text per recommendation" in pauses[2]["error"]
+    [entry] = audit.entries()
+    assert entry["decision"] == "reject"

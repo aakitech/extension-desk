@@ -109,19 +109,24 @@ def _short(value, limit: int = 110) -> str:
 
 def trace_update(node: str, update: dict) -> list[str]:
     """Lines describing one graph step, as it happens: what the model called,
-    what came back, and what the checks decided. Nothing is edited out."""
+    what came back, and what the checks decided. Long arguments are cut and
+    results show record IDs only; the full content is in the transcript."""
     lines = []
     for msg in (update or {}).get("messages", []):
         kind = getattr(msg, "type", "")
         if kind == "ai":
-            for tc in getattr(msg, "tool_calls", []):
+            calls = getattr(msg, "tool_calls", [])
+            if _text(msg).strip():
+                label = "model (text)" if calls else "model (text, no tool call)"
+                lines.append(f"  {label}: {_short(_text(msg))}")
+            for tc in calls:
                 lines.append(f"  model -> {tc['name']}({_short(tc['args'], 90)})")
-            if not getattr(msg, "tool_calls", None) and msg.content:
-                lines.append(f"  model (text, no tool call): {_short(msg.content)}")
         elif kind == "tool":
             text = _text(msg)
             if getattr(msg, "status", "") == "error":
-                lines.append(f"  {msg.name or 'check'} !! {_short(text)}")
+                # Graph-made replies have no tool name: say which step made them.
+                label = msg.name or {"check": "citation check", "nudge": "nudge"}.get(node, node)
+                lines.append(f"  {label} !! {_short(text)}")
             else:
                 try:
                     cites = json.loads(text).get("citations", [])
@@ -134,7 +139,8 @@ def trace_update(node: str, update: dict) -> list[str]:
     if node == "clock" and update.get("today"):
         lines.append(f"  time server -> today is {update['today']}")
     if node == "queue_draft" and update.get("item"):
-        lines.append(f"  draft_advisory -> queued {update['item']['item_id']} as pending_approval (nothing sent)")
+        item = update["item"]
+        lines.append(f"  draft_advisory -> queued {item['item_id']} as {item.get('status')} (nothing sent)")
     return lines
 
 
