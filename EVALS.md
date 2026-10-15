@@ -94,7 +94,7 @@ What the run showed about this model:
 - **It gets details wrong that the citation checks can't see.** It calls a medium-severity alert "high". It suggests selling a crop that hasn't been harvested.
 - **Its drafts are generic.**
 
-**Not compared:** no hosted-model run has been made, so this records no differences from a hosted model.
+**Not compared:** no hosted-model run has been made, so this records no differences from a hosted model. That comparison is tracked in #14.
 
 ## Unfixed failure: an instruction hidden in a data record reaches the officer
 
