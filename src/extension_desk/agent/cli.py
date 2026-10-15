@@ -101,16 +101,72 @@ def ask_officer(payload: dict, officer: str) -> dict:
     return {"decision": "edit", "officer": officer, "edits": edits}
 
 
-async def run_household(app, household_id: str, answer, transcript: Transcript | None = None) -> dict:
+def _short(value, limit: int = 110) -> str:
+    text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[:limit - 3] + "..."
+
+
+def trace_update(node: str, update: dict) -> list[str]:
+    """Lines describing one graph step, as it happens: what the model called,
+    what came back, and what the checks decided. Long arguments are cut and
+    results show record IDs only; the full content is in the transcript."""
+    lines = []
+    for msg in (update or {}).get("messages", []):
+        kind = getattr(msg, "type", "")
+        if kind == "ai":
+            calls = getattr(msg, "tool_calls", [])
+            if _text(msg).strip():
+                label = "model (text)" if calls else "model (text, no tool call)"
+                lines.append(f"  {label}: {_short(_text(msg))}")
+            for tc in calls:
+                lines.append(f"  model -> {tc['name']}({_short(tc['args'], 90)})")
+        elif kind == "tool":
+            text = _text(msg)
+            if getattr(msg, "status", "") == "error":
+                # Graph-made replies have no tool name: say which step made them.
+                label = msg.name or {"check": "citation check", "nudge": "nudge"}.get(node, node)
+                lines.append(f"  {label} !! {_short(text)}")
+            else:
+                try:
+                    cites = json.loads(text).get("citations", [])
+                    lines.append(f"  {msg.name} <- {len(cites)} record(s)"
+                                 + (f": {', '.join(cites[:4])}{' ...' if len(cites) > 4 else ''}" if cites else ""))
+                except (json.JSONDecodeError, AttributeError):
+                    lines.append(f"  {msg.name or node} <- {_short(text)}")
+        elif kind == "human" and node in ("queue_draft", "nudge"):
+            lines.append(f"  {node} !! {_short(msg.content)}")
+    if node == "clock" and update.get("today"):
+        lines.append(f"  time server -> today is {update['today']}")
+    if node == "queue_draft" and update.get("item"):
+        item = update["item"]
+        lines.append(f"  draft_advisory -> queued {item['item_id']} as {item.get('status')} (nothing sent)")
+    return lines
+
+
+async def run_household(app, household_id: str, answer, transcript: Transcript | None = None,
+                        trace: bool = False) -> dict:
     # A new thread per run: nothing from an earlier run of this household carries over.
     config = {"configurable": {"thread_id": f"{household_id}:{uuid.uuid4()}"}}
     started, gate = time.monotonic(), []
-    result = await app.ainvoke({"household_id": household_id}, config)
-    while result.get("__interrupt__"):
-        pause = result["__interrupt__"][0].value
+    step = {"household_id": household_id}
+    while True:
+        pause = None
+        async for chunk in app.astream(step, config, stream_mode="updates"):
+            for node, update in chunk.items():
+                if node == "__interrupt__":
+                    pause = update[0].value
+                elif trace:
+                    for line in trace_update(node, update):
+                        print(line, flush=True)
+        if pause is None:
+            break
+        if trace:
+            print("  officer gate: paused for the officer", flush=True)
         reply = answer(pause)
         gate.append({"shown": pause, "answer": reply})
-        result = await app.ainvoke(Command(resume=reply), config)
+        step = Command(resume=reply)
+    result = (await app.aget_state(config)).values
     if transcript:
         transcript.household(household_id, state=result, gate=gate, seconds=time.monotonic() - started)
     return result["outcome"]
@@ -152,7 +208,7 @@ async def demo(args) -> int:
     outcomes = {}
     for hh in households:
         print(f"\n=== {hh} ===")
-        outcomes[hh] = await run_household(app, hh, answer, transcript)
+        outcomes[hh] = await run_household(app, hh, answer, transcript, trace=not args.quiet)
         o = outcomes[hh]
         print(f"Outcome: {o['status']}" + (f" ({o.get('reason')})" if o.get("reason") else "")
               + (f", {o['item_id']} by {o['officer']}" if o.get("item_id") else "") + ". Not sent.")
@@ -169,6 +225,7 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--model", help="ollama:<model> or anthropic:<model> (default from EXTENSION_DESK_MODEL)")
     d.add_argument("--officer", help="officer name recorded in the audit log")
     d.add_argument("--runs-dir", help="where run transcripts go (default state/runs)")
+    d.add_argument("--quiet", action="store_true", help="don't print each tool call as it happens")
     d.add_argument("--decide", choices=["ask", "approve", "reject"], default="ask",
                    help="answer the gate interactively (default) or with a fixed decision")
     e = sub.add_parser("eval", help="run the eval tasks against the configured model")
