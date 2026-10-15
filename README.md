@@ -4,7 +4,7 @@ An agentic assistant for agricultural extension offices. An officer can't visit 
 
 Built for the [Agentic AI for Africa Innovation Challenge](https://agentic-africa-challenge.lovable.app/tracks/agriculture), Agriculture track: "The Extension Backlog".
 
-> **Status:** in development. Submission deadline is 15 Oct 2026.
+> **Status:** challenge submission, 15 Oct 2026. Results and known failures are in [EVALS.md](EVALS.md).
 
 ## How it works
 
@@ -19,7 +19,7 @@ Built for the [Agentic AI for Africa Innovation Challenge](https://agentic-afric
 uv run extension-desk demo
 ```
 
-This runs one backlog pass over the Chiredzi pilot district. For each of three households, the agent gathers evidence through our MCP server, drafts an advisory with citations, and stops at the officer approval gate. You answer as the officer (approve, edit or reject). Nothing is sent to any household. Decisions go to `state/audit.jsonl`.
+This runs one backlog pass over the Chiredzi pilot district. For each of three households, the agent gathers evidence through our MCP server, drafts an advisory with citations, and stops at the officer approval gate. Each tool call the model makes is printed as it happens, with what came back and what the citation checks decided (`--quiet` turns this off). You answer as the officer (approve, edit or reject). Nothing is sent to any household. Decisions go to `state/audit.jsonl`, and a full transcript of the run to `state/runs/`.
 
 Before you run it:
 
