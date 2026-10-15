@@ -42,7 +42,7 @@ These observations come from the transcripts:
 - **It sends arguments the tools don't take** (`includes_preliminary: true` on `get_rainfall`). The server ignored them.
 - **It gets details wrong.** The hh:003 draft calls cutworm "high severity"; the cited record says medium. It also tells a household with nothing harvested yet to "consider selling sorghum when prices are favorable".
 - **Its drafts are generic.** hh:003's draft packs three pieces of advice into one sentence. hh:018's final draft is one line: "Monitor rainfall and irrigation, keep an eye on market trends, and manage the cowpeas and groundnuts plots."
-- **It responds to the guards.** Each refusal message names the bad citation and why. On hh:018 the model named the exact problem on the next turn, though it took three more turns (revised prose, a nudge, another plot lookup) before it resubmitted a draft that passed.
+- **It responds to the guards.** Each refusal message names the bad citation and why. On hh:018 the model named the exact problem on its next turn (in prose, which needed a nudge), looked up the plots again, and resubmitted a passing draft two turns after naming it.
 
 ## Not compared
 
