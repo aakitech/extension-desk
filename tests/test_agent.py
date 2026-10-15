@@ -584,3 +584,20 @@ def test_runs_started_in_the_same_second_get_separate_directories(tmp_path):
     first = unique_dir(tmp_path, "20261013T090000Z")
     second = unique_dir(tmp_path, "20261013T090000Z")
     assert first.name == "20261013T090000Z" and second.name == "20261013T090000Z-2"
+
+
+def test_demo_prints_each_tool_call_as_it_happens(monkeypatch, tmp_path, capsys):
+    # The brief's demo video must show unedited tool calls.
+    _demo_env(monkeypatch, tmp_path, [*GATHER, DISTRICT_ONLY])
+    assert cli.main(["demo", "--limit", "1", "--decide", "reject", "--officer", "T. Moyo"]) == 0
+    out = capsys.readouterr().out
+    for line in ("time server -> today is", "model -> get_plot_records(", "get_rainfall <- 6 record(s): rain:",
+                 "model -> submit_draft(", "queued advisory:", "officer gate: paused"):
+        assert line in out, line
+    assert out.index("model -> get_plot_records(") < out.index("officer gate: paused")
+
+
+def test_quiet_demo_prints_no_trace(monkeypatch, tmp_path, capsys):
+    _demo_env(monkeypatch, tmp_path, [*GATHER, DISTRICT_ONLY])
+    assert cli.main(["demo", "--limit", "1", "--decide", "reject", "--officer", "T. Moyo", "--quiet"]) == 0
+    assert "model -> " not in capsys.readouterr().out
