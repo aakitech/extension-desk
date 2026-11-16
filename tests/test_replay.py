@@ -12,7 +12,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from extension_desk.agent import cli
 from extension_desk.agent.audit import AuditLog
 from extension_desk.agent.graph import QUEUE_REFUSED
-from extension_desk.agent.replay import first_difference, load_recording, token_usage
+from extension_desk.agent.replay import first_difference, gate_difference, load_recording, token_usage
 from extension_desk.data import DATA_DIR
 
 RECORDING = Path(__file__).resolve().parents[1] / "evals" / "runs" / "20261012T215559Z-qwen2.5-7b" / "hh_018.json"
@@ -73,8 +73,14 @@ def test_replay_stops_when_a_tool_result_no_longer_matches(demo_env, monkeypatch
     monkeypatch.setenv("EXTENSION_DESK_DATA", str(data))
 
     assert _replay() == 3
-    assert "replay stopped" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    # Stopped at the changed tool result, before the next model turn: not
+    # later, when the run's shorter path reaches the gate.
+    assert "replay stopped: message 9 differs: live tool" in err
     assert AuditLog(demo_env / "a.jsonl").entries() == []
+    # The partial run is kept, with the reason, for diagnosis.
+    live = _transcript(demo_env)
+    assert live["outcome"]["status"] == "replay_diverged" and "message 9" in live["outcome"]["reason"]
 
 
 @pytest.mark.parametrize("args, message", [
@@ -102,11 +108,11 @@ def test_household_flag_runs_only_that_household(demo_env, monkeypatch, capsys):
     assert "Tokens: not reported by this model." in out
 
 
-def _conversation(tool_result="r", verdict=f"{QUEUE_REFUSED}: x", nudge="Continue."):
+def _conversation(tool_result="r", verdict=f"{QUEUE_REFUSED}: x", nudge="Continue.", status="success"):
     call = AIMessage("", tool_calls=[{"name": "get_plot_records", "args": {"household_id": "hh:018"},
                                       "id": "1", "type": "tool_call"}])
     return [SystemMessage("s"), HumanMessage("Household hh:018. Today is ..."), call,
-            ToolMessage(tool_result, tool_call_id="1"), HumanMessage(verdict), HumanMessage(nudge),
+            ToolMessage(tool_result, tool_call_id="1", status=status), HumanMessage(verdict), HumanMessage(nudge),
             AIMessage("next")]
 
 
@@ -114,6 +120,7 @@ def _conversation(tool_result="r", verdict=f"{QUEUE_REFUSED}: x", nudge="Continu
     ({}, False),
     ({"nudge": "Your last reply was plain text."}, False),   # an instruction, not evidence
     ({"tool_result": "other"}, True),
+    ({"status": "error"}, True),                             # same text, now an error
     ({"verdict": f"{QUEUE_REFUSED}: y"}, True),
 ])
 def test_first_difference_compares_evidence_not_instructions(change, differs):
@@ -162,3 +169,31 @@ def test_replay_refuses_a_file_that_is_not_a_transcript(demo_env, capsys):
     bad.write_text(json.dumps({"household_id": "hh:018", "messages": [{"no": "type"}]}), encoding="utf-8")
     assert cli.main(["demo", "--replay", str(bad), "--decide", "approve", "--officer", "T. Moyo"]) == 2
     assert "Can't load the recording" in capsys.readouterr().err
+
+
+def test_replay_stops_before_the_officer_when_the_shown_draft_differs(demo_env, capsys):
+    # The queued item comes back from the server outside the conversation.
+    # If what the officer would see differs from the recording, stop first.
+    data = json.loads(RECORDING.read_text(encoding="utf-8"))
+    data["gate"][0]["shown"]["item"]["payload"]["recommendations"][0]["text"] = "CHANGED ADVICE"
+    run_dir = demo_env / "rec"
+    run_dir.mkdir()
+    (run_dir / "hh_018.json").write_text(json.dumps(data), encoding="utf-8")
+    assert cli.main(["demo", "--replay", str(run_dir / "hh_018.json"), "--replay-delay", "0",
+                     "--officer", "T. Moyo"]) == 3
+    captured = capsys.readouterr()
+    assert "the draft shown to the officer differs in 'payload'" in captured.err
+    assert "Officer decision" not in captured.out
+    assert AuditLog(demo_env / "a.jsonl").entries() == []
+
+
+def test_gate_difference_ignores_fresh_ids_and_times_only():
+    shown = load_recording(RECORDING)["shown"]
+    fresh = json.loads(json.dumps(shown))
+    fresh["item"].update(item_id="advisory:99", created_at="2026-11-17T09:00:00+00:00")
+    assert gate_difference(fresh, shown) is None
+    fresh["item"]["citations"] = fresh["item"]["citations"][:-1]
+    assert "citations" in gate_difference(fresh, shown)
+    fresh = json.loads(json.dumps(shown))
+    fresh["sources"]["plot:018-1"]["crop"] = "sorghum"
+    assert "source records" in gate_difference(fresh, shown)

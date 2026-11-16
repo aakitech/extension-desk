@@ -39,8 +39,9 @@ def load_recording(path: Path | str) -> dict:
     model = None
     if run.exists():
         model = json.loads(run.read_text(encoding="utf-8")).get("model")
+    gate = data.get("gate") or []
     return {"household_id": data["household_id"], "messages": messages_from_dict(data["messages"]),
-            "model": model, "path": path}
+            "shown": gate[0]["shown"] if gate else None, "model": model, "path": path}
 
 
 # Human messages the graph writes are either the review queue's verdict on a
@@ -57,6 +58,8 @@ def _same(live: BaseMessage, recorded: BaseMessage) -> bool:
         return strip(live) == strip(recorded)
     if live.type == "human" and not any(_text(m).startswith(VERDICTS) for m in (live, recorded)):
         return True
+    if live.type == "tool" and getattr(live, "status", "success") != getattr(recorded, "status", "success"):
+        return False
     return " ".join(_text(live).split()) == " ".join(_text(recorded).split())
 
 
@@ -91,6 +94,26 @@ def whole_run_difference(live: list[BaseMessage], recorded: list[BaseMessage]) -
         if i >= 2 and not _same(a, b):
             return (f"message {i} differs: live {a.type} {_text(a)[:120]!r} "
                     f"vs recorded {b.type} {_text(b)[:120]!r}")
+    return None
+
+
+# What the officer is shown: the queued item and every cited record. Fields
+# made fresh on each run (ID, timestamps, decision) are not compared.
+ITEM_FIELDS = ("kind", "household_id", "status", "payload", "citations", "created_by", "note")
+
+
+def gate_difference(live: dict | None, recorded: dict | None) -> str | None:
+    """Whether what the officer is about to see differs from what the
+    recording's officer saw. The queued item comes back from the server outside
+    the conversation, so the message comparison alone can't see it change."""
+    if recorded is None:
+        return "the recording never reached the officer gate"
+    li, ri = (live or {}).get("item") or {}, recorded.get("item") or {}
+    for f in ITEM_FIELDS:
+        if li.get(f) != ri.get(f):
+            return f"the draft shown to the officer differs in {f!r}: live {li.get(f)!r:.120} vs recorded {ri.get(f)!r:.120}"
+    if (live or {}).get("sources") != recorded.get("sources"):
+        return "the source records shown to the officer differ from the recording"
     return None
 
 
