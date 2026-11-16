@@ -21,7 +21,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, messages_from_dict
 from langchain_core.outputs import ChatGeneration, ChatResult
 
-from extension_desk.agent.graph import _text
+from extension_desk.agent.graph import QUEUE_REFUSED, _text
 
 
 class ReplayDiverged(RuntimeError):
@@ -46,7 +46,7 @@ def load_recording(path: Path | str) -> dict:
 # Human messages the graph writes are either the review queue's verdict on a
 # draft (evidence: compared) or instructions to the model, like the opening
 # message and the nudge after plain text (not compared, like the system prompt).
-VERDICTS = ("The review queue refused the draft",)
+VERDICTS = (QUEUE_REFUSED,)
 
 
 def _same(live: BaseMessage, recorded: BaseMessage) -> bool:
@@ -76,6 +76,21 @@ def first_difference(live: list[BaseMessage], recorded: list[BaseMessage]) -> st
                     f"vs recorded {b.type} {_text(b)[:120]!r}")
     if recorded[len(live)].type != "ai":
         return f"the recording expects a {recorded[len(live)].type} message at {len(live)}, not a model turn"
+    return None
+
+
+def whole_run_difference(live: list[BaseMessage], recorded: list[BaseMessage]) -> str | None:
+    """Where a finished (or gate-paused) live run differs from the whole
+    recording, or None. Checked where the graph stops without asking the model
+    again: if the live server accepted a draft the recording shows refused,
+    the run reaches the officer early, and only this check sees it."""
+    if len(live) != len(recorded):
+        return (f"the live run has {len(live)} messages where the recording has {len(recorded)} "
+                f"(it took a different path, e.g. a verdict changed)")
+    for i, (a, b) in enumerate(zip(live, recorded)):
+        if i >= 2 and not _same(a, b):
+            return (f"message {i} differs: live {a.type} {_text(a)[:120]!r} "
+                    f"vs recorded {b.type} {_text(b)[:120]!r}")
     return None
 
 

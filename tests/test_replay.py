@@ -11,6 +11,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 
 from extension_desk.agent import cli
 from extension_desk.agent.audit import AuditLog
+from extension_desk.agent.graph import QUEUE_REFUSED
 from extension_desk.agent.replay import first_difference, load_recording, token_usage
 from extension_desk.data import DATA_DIR
 
@@ -55,9 +56,9 @@ def test_replay_reaches_the_officer_and_the_refusal_is_made_live(demo_env, capsy
     assert live["outcome"]["status"] == "approved"
 
 
-def test_replay_stops_when_live_data_no_longer_matches(demo_env, monkeypatch, capsys):
-    # If the pest alerts now affected cowpeas, the server would accept the
-    # draft the recording had refused, so the recorded answers no longer fit.
+def test_replay_stops_when_a_tool_result_no_longer_matches(demo_env, monkeypatch, capsys):
+    # Changed pest data changes what get_pest_alerts returns, so the recorded
+    # answers no longer fit what the model would see.
     data = demo_env / "data"
     shutil.copytree(DATA_DIR, data)
     path = data / "pest_alerts.csv"
@@ -101,7 +102,7 @@ def test_household_flag_runs_only_that_household(demo_env, monkeypatch, capsys):
     assert "Tokens: not reported by this model." in out
 
 
-def _conversation(tool_result="r", verdict="The review queue refused the draft: x", nudge="Continue."):
+def _conversation(tool_result="r", verdict=f"{QUEUE_REFUSED}: x", nudge="Continue."):
     call = AIMessage("", tool_calls=[{"name": "get_plot_records", "args": {"household_id": "hh:018"},
                                       "id": "1", "type": "tool_call"}])
     return [SystemMessage("s"), HumanMessage("Household hh:018. Today is ..."), call,
@@ -113,7 +114,7 @@ def _conversation(tool_result="r", verdict="The review queue refused the draft: 
     ({}, False),
     ({"nudge": "Your last reply was plain text."}, False),   # an instruction, not evidence
     ({"tool_result": "other"}, True),
-    ({"verdict": "The review queue refused the draft: y"}, True),
+    ({"verdict": f"{QUEUE_REFUSED}: y"}, True),
 ])
 def test_first_difference_compares_evidence_not_instructions(change, differs):
     recorded = _conversation()
@@ -130,3 +131,34 @@ def test_token_usage_sums_model_replies_only():
     rec = load_recording(RECORDING)
     assert token_usage(rec["messages"]) == {"model_calls": 8, "input_tokens": 21385, "output_tokens": 2095}
     assert rec["model"] == "ollama:qwen2.5:7b"
+
+
+def test_replay_stops_before_the_officer_when_the_server_now_accepts_a_refused_draft(demo_env, capsys):
+    # Tool results stay identical; only the verdict flips. The recorded first
+    # draft is changed so line 3 cites the household's own plot: the live
+    # server accepts it, and the graph goes straight to the officer without
+    # asking the model again. The officer must never see that draft.
+    data = json.loads(RECORDING.read_text(encoding="utf-8"))
+    first = next(m for m in data["messages"] if m["type"] == "ai"
+                 and any(tc["name"] == "submit_draft" for tc in m["data"]["tool_calls"]))
+    for tc in first["data"]["tool_calls"]:
+        tc["args"]["recommendations"][2]["citations"] = ["plot:018-1"]
+    run_dir = demo_env / "rec"
+    run_dir.mkdir()
+    (run_dir / "hh_018.json").write_text(json.dumps(data), encoding="utf-8")
+
+    # Interactive (--decide ask): if the gate were reached, input() would be
+    # called and fail under pytest's captured stdin.
+    assert cli.main(["demo", "--replay", str(run_dir / "hh_018.json"), "--replay-delay", "0",
+                     "--officer", "T. Moyo"]) == 3
+    captured = capsys.readouterr()
+    assert "replay stopped" in captured.err and "different path" in captured.err
+    assert "Officer decision" not in captured.out and "paused for the officer" not in captured.out
+    assert AuditLog(demo_env / "a.jsonl").entries() == []
+
+
+def test_replay_refuses_a_file_that_is_not_a_transcript(demo_env, capsys):
+    bad = demo_env / "bad.json"
+    bad.write_text(json.dumps({"household_id": "hh:018", "messages": [{"no": "type"}]}), encoding="utf-8")
+    assert cli.main(["demo", "--replay", str(bad), "--decide", "approve", "--officer", "T. Moyo"]) == 2
+    assert "Can't load the recording" in capsys.readouterr().err

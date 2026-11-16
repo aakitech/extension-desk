@@ -37,6 +37,7 @@ TIMEZONE = "Africa/Harare"
 MAX_TURNS = 10      # model calls per household before giving up
 MAX_ATTEMPTS = 2    # drafts per household that may fail the citation check
 READ_TOOLS = ("get_rainfall", "get_prices", "get_plot_records", "get_pest_alerts", "get_current_time")
+QUEUE_REFUSED = "The review queue refused the draft"   # opens the server's verdict on a refused draft
 
 SYSTEM = """You are the drafting assistant for an agricultural extension office in Zimbabwe.
 For the household you are given, gather evidence with the tools, then either submit a draft
@@ -283,7 +284,7 @@ def build_graph(model, tools: list[BaseTool], store: DataStore, queue: ReviewQue
         if not item or "item_id" not in item:
             # The server's own check refused it (e.g. a cited record isn't about this household).
             return {"attempts": 1, "item": None, "messages": [HumanMessage(
-                f"The review queue refused the draft: {_text(msg)}\nFix it, or call no_advice.")]}
+                f"{QUEUE_REFUSED}: {_text(msg)}\nFix it, or call no_advice.")]}
         return {"item": item}
 
     def after_queue(state: State) -> str:

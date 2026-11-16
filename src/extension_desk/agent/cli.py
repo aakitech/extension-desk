@@ -21,7 +21,8 @@ from langgraph.types import Command
 from extension_desk.agent.audit import AuditLog
 from extension_desk.agent.graph import TIMEZONE, _text, build_graph
 from extension_desk.agent.models import ModelUnavailable, make_model, model_details, model_spec
-from extension_desk.agent.replay import ReplayDiverged, ReplayModel, load_recording, token_usage
+from extension_desk.agent.replay import (ReplayDiverged, ReplayModel, load_recording, token_usage,
+                                         whole_run_difference)
 from extension_desk.agent.transcript import Transcript
 from extension_desk.data import DATA_ENV, DataStore
 from extension_desk.districts import DISTRICTS
@@ -154,7 +155,11 @@ def token_line(usage: dict, replayed: bool = False) -> str:
 
 
 async def run_household(app, household_id: str, answer, transcript: Transcript | None = None,
-                        trace: bool = False, tokens: bool = False, replayed: bool = False) -> dict:
+                        trace: bool = False, tokens: bool = False, replayed: bool = False,
+                        verify=None) -> dict:
+    """`verify(messages)` returns a problem or None. It runs before the
+    officer is asked anything and when the run ends; a problem stops the run
+    with ReplayDiverged, after the transcript is written."""
     # A new thread per run: nothing from an earlier run of this household carries over.
     config = {"configurable": {"thread_id": f"{household_id}:{uuid.uuid4()}"}}
     started, gate = time.monotonic(), []
@@ -170,6 +175,9 @@ async def run_household(app, household_id: str, answer, transcript: Transcript |
                         print(line, flush=True)
         if pause is None:
             break
+        problem = verify and verify((await app.aget_state(config)).values.get("messages", []))
+        if problem:
+            break
         if trace:
             print("  officer gate: paused for the officer", flush=True)
         reply = answer(pause)
@@ -178,6 +186,9 @@ async def run_household(app, household_id: str, answer, transcript: Transcript |
     result = (await app.aget_state(config)).values
     if transcript:
         transcript.household(household_id, state=result, gate=gate, seconds=time.monotonic() - started)
+    problem = verify and verify(result.get("messages", []))
+    if problem:
+        raise ReplayDiverged(f"replay stopped: {problem}")
     if tokens:
         print(token_line(token_usage(result.get("messages", [])), replayed), flush=True)
     return result["outcome"]
@@ -202,14 +213,14 @@ async def demo(args) -> int:
             return 2
         try:
             recording = load_recording(args.replay)
-        except (OSError, ValueError) as e:
-            print(f"Can't load the recording: {e}", file=sys.stderr)
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            print(f"Can't load the recording: {e!r}", file=sys.stderr)
             return 2
         if recording["household_id"] not in in_district:
             print(f"The recording is for {recording['household_id']}, not a household in {args.district}.",
                   file=sys.stderr)
             return 2
-        if args.household and args.household != [recording["household_id"]]:
+        if args.household and set(args.household) != {recording["household_id"]}:
             print(f"The recording is for {recording['household_id']} only.", file=sys.stderr)
             return 2
         model = ReplayModel(recorded=recording["messages"], delay=args.replay_delay)
@@ -242,7 +253,8 @@ async def demo(args) -> int:
         households = list(dict.fromkeys(args.household))
     else:
         households = backlog(store, args.district, args.limit, today)
-    meta = ({"model": f"replay:{recording['model']}", "replayed_from": str(recording["path"])} if recording
+    meta = ({"model": f"replay:{recording['model']}",
+             "replayed_from": f"{recording['path'].parent.name}/{recording['path'].name}"} if recording
             else {"model": spec, "model_details": model_details(args.model)})
     transcript = Transcript(args.runs_dir, **meta, district=args.district, today=today.isoformat(),
                             backlog=households, decide=args.decide, officer=officer)
@@ -257,8 +269,9 @@ async def demo(args) -> int:
     for hh in households:
         print(f"\n=== {hh}{' (model turns replayed)' if recording else ''} ===")
         try:
+            verify = (lambda msgs: whole_run_difference(msgs, recording["messages"])) if recording else None
             outcomes[hh] = await run_household(app, hh, answer, transcript, trace=not args.quiet,
-                                               tokens=True, replayed=bool(recording))
+                                               tokens=True, replayed=bool(recording), verify=verify)
         except ReplayDiverged as e:
             print(f"\n{e}\nThe live system no longer matches the recording, so the replay stopped here.",
                   file=sys.stderr)
