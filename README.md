@@ -46,7 +46,17 @@ Before you run it:
 - [uv](https://docs.astral.sh/uv/)
 - [Ollama](https://ollama.com) with the default open-weights model: `ollama pull qwen2.5:7b`. If Ollama isn't running, the demo says so and exits.
 
-Options: `--quiet`, `--district mangwe`, `--limit N`, `--officer NAME`, `--decide approve|reject` (non-interactive), `--model anthropic:<model>` (hosted; run `uv sync --extra hosted` and set `ANTHROPIC_API_KEY`).
+Options: `--quiet`, `--district mangwe`, `--limit N`, `--household hh:018` (run named households instead of the backlog), `--officer NAME`, `--decide approve|reject` (non-interactive), `--model anthropic:<model>` (hosted; run `uv sync --extra hosted` and set `ANTHROPIC_API_KEY`). After each household the demo prints the model calls and tokens it used, read from the model's own usage reports.
+
+### Replaying a recorded run
+
+```bash
+uv run extension-desk demo --replay evals/runs/20261012T215559Z-qwen2.5-7b/hh_018.json
+```
+
+This replays the model's turns from a recorded run, so a live presentation takes seconds and shows the same model behaviour every time. Only the model is replayed. Both MCP servers, the data lookups, the citation checks, the review queue and the officer gate run live, so the server's refusal of the sorghum citation is made again on the spot, and the officer's decision is recorded for real. Ollama isn't needed.
+
+Before each replayed turn, the live conversation is compared with the recording: every tool result and every review-queue verdict must match exactly. If one differs, the replay stops (exit code 3), because the recorded answer no longer fits what the model would see. The graph's instructions to the model (system prompt, opening message, nudges) aren't compared. The recording above was made on 12 Oct with an earlier version of those instructions, so the replayed turns are what `qwen2.5:7b` did then, not necessarily what it does with today's prompt. The token counts it prints are the ones logged in that recording. `--replay-delay` sets the pause before each replayed turn (default 1 second).
 
 ## Evals
 
