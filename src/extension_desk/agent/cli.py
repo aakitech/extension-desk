@@ -7,6 +7,7 @@ sent to any household; approved drafts wait in the review queue.
 
 import argparse
 import asyncio
+import inspect
 import json
 import os
 import sys
@@ -21,6 +22,8 @@ from langgraph.types import Command
 from extension_desk.agent.audit import AuditLog
 from extension_desk.agent.graph import TIMEZONE, _text, build_graph
 from extension_desk.agent.models import ModelUnavailable, make_model, model_details, model_spec
+from extension_desk.agent.replay import (ReplayDiverged, ReplayModel, gate_difference, load_recording,
+                                         token_usage, whole_run_difference)
 from extension_desk.agent.transcript import Transcript
 from extension_desk.data import DATA_ENV, DataStore
 from extension_desk.districts import DISTRICTS
@@ -144,31 +147,66 @@ def trace_update(node: str, update: dict) -> list[str]:
     return lines
 
 
+def token_line(usage: dict, replayed: bool = False) -> str:
+    if not usage["model_calls"]:
+        return "Tokens: not reported by this model."
+    return (f"Tokens: {usage['model_calls']} model calls, {usage['input_tokens']:,} in + "
+            f"{usage['output_tokens']:,} out = {usage['input_tokens'] + usage['output_tokens']:,}"
+            + (" (as logged when the replayed run was recorded)" if replayed else "") + ".")
+
+
 async def run_household(app, household_id: str, answer, transcript: Transcript | None = None,
-                        trace: bool = False) -> dict:
+                        trace: bool = False, tokens: bool = False, replayed: bool = False,
+                        verify=None, on_update=None) -> dict:
+    """`verify(messages, shown)` returns a problem or None. It runs before
+    the officer is asked anything (with what the officer would be shown) and
+    when the run ends (shown=None); a problem stops the run with
+    ReplayDiverged. The transcript is written either way.
+    `on_update(node, update)` sees every graph step (the officer page uses it);
+    `answer` may be a coroutine function (the page awaits the officer's click)."""
     # A new thread per run: nothing from an earlier run of this household carries over.
     config = {"configurable": {"thread_id": f"{household_id}:{uuid.uuid4()}"}}
     started, gate = time.monotonic(), []
     step = {"household_id": household_id}
+    problem = None
     while True:
         pause = None
-        async for chunk in app.astream(step, config, stream_mode="updates"):
-            for node, update in chunk.items():
-                if node == "__interrupt__":
-                    pause = update[0].value
-                elif trace:
-                    for line in trace_update(node, update):
-                        print(line, flush=True)
+        try:
+            async for chunk in app.astream(step, config, stream_mode="updates"):
+                for node, update in chunk.items():
+                    if node == "__interrupt__":
+                        pause = update[0].value
+                        continue
+                    if on_update:
+                        on_update(node, update)
+                    if trace:
+                        for line in trace_update(node, update):
+                            print(line, flush=True)
+        except ReplayDiverged as e:  # raised by the replayed model before a turn
+            problem = str(e).removeprefix("replay stopped: ")
+            break
         if pause is None:
+            break
+        problem = verify and verify((await app.aget_state(config)).values.get("messages", []), pause)
+        if problem:
             break
         if trace:
             print("  officer gate: paused for the officer", flush=True)
         reply = answer(pause)
+        if inspect.isawaitable(reply):
+            reply = await reply
         gate.append({"shown": pause, "answer": reply})
         step = Command(resume=reply)
-    result = (await app.aget_state(config)).values
+    result = dict((await app.aget_state(config)).values)
+    problem = problem or (verify and verify(result.get("messages", []), None))
+    if problem:
+        result["outcome"] = {"status": "replay_diverged", "reason": problem, "delivered": False}
     if transcript:
         transcript.household(household_id, state=result, gate=gate, seconds=time.monotonic() - started)
+    if problem:
+        raise ReplayDiverged(f"replay stopped: {problem}")
+    if tokens:
+        print(token_line(token_usage(result.get("messages", [])), replayed), flush=True)
     return result["outcome"]
 
 
@@ -178,14 +216,41 @@ async def demo(args) -> int:
         print("--decide approve/reject needs --officer: a scripted decision is still logged under a name.",
               file=sys.stderr)
         return 2
-    try:
-        model = make_model(args.model)
-    except ModelUnavailable as e:
-        print(f"Can't start the model ({model_spec(args.model)}): {e}", file=sys.stderr)
+    store = DataStore.load()
+    in_district = {hh["record_id"] for hh in store.households(args.district)}
+    unknown = [hh for hh in (args.household or []) if hh not in in_district]
+    if unknown:
+        print(f"Not a household in {args.district}: {', '.join(unknown)}", file=sys.stderr)
         return 2
+    recording = None
+    if args.replay:
+        if args.model:
+            print("--replay replays a recorded model; it can't be combined with --model.", file=sys.stderr)
+            return 2
+        try:
+            recording = load_recording(args.replay)
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            print(f"Can't load the recording: {e!r}", file=sys.stderr)
+            return 2
+        if recording["household_id"] not in in_district:
+            print(f"The recording is for {recording['household_id']}, not a household in {args.district}.",
+                  file=sys.stderr)
+            return 2
+        if args.household and set(args.household) != {recording["household_id"]}:
+            print(f"The recording is for {recording['household_id']} only.", file=sys.stderr)
+            return 2
+        model = ReplayModel(recorded=recording["messages"], delay=args.replay_delay)
+        spec = f"replay of {recording['model'] or 'a recorded model'}"
+    else:
+        try:
+            model = make_model(args.model)
+        except ModelUnavailable as e:
+            print(f"Can't start the model ({model_spec(args.model)}): {e}", file=sys.stderr)
+            return 2
+        spec = model_spec(args.model)
     while not officer:
         officer = input("Officer name (recorded with every decision): ").strip()
-    store, queue, audit = DataStore.load(), ReviewQueue(), AuditLog()
+    queue, audit = ReviewQueue(), AuditLog()
     tools = await MultiServerMCPClient(mcp_connections(queue)).get_tools()
     app = build_graph(model, tools, store, queue, audit, checkpointer=InMemorySaver())
     today = await today_from_time_server(tools)
@@ -198,17 +263,38 @@ async def demo(args) -> int:
             print(f"Decision: {args.decide} (fixed by --decide; logged as answered_via=flag, not a review)")
             return {"decision": args.decide, "officer": officer, "answered_via": "flag"}
 
-    households = backlog(store, args.district, args.limit, today)
-    transcript = Transcript(args.runs_dir, model=model_spec(args.model), model_details=model_details(args.model),
-                            district=args.district, today=today.isoformat(), backlog=households,
-                            decide=args.decide, officer=officer)
-    print(f"Model: {model_spec(args.model)}. District: {args.district}. Today: {today} (time server). "
-          f"Backlog: {', '.join(households)}")
+    if recording:
+        households = [recording["household_id"]]
+    elif args.household:
+        households = list(dict.fromkeys(args.household))
+    else:
+        households = backlog(store, args.district, args.limit, today)
+    meta = ({"model": f"replay:{recording['model']}",
+             "replayed_from": f"{recording['path'].parent.name}/{recording['path'].name}"} if recording
+            else {"model": spec, "model_details": model_details(args.model)})
+    transcript = Transcript(args.runs_dir, **meta, district=args.district, today=today.isoformat(),
+                            backlog=households, decide=args.decide, officer=officer)
+    print(f"Model: {spec}. District: {args.district}. Today: {today} (time server). "
+          f"Households: {', '.join(households)}")
+    if recording:
+        print(f"REPLAY: the model's turns are replayed from {recording['path'].parent.name}/"
+              f"{recording['path'].name}. Our MCP server, the time server, the citation checks, the review "
+              "queue and the officer gate are running live now.")
     print("Nothing is sent to any household. Approved drafts wait in the review queue.")
     outcomes = {}
     for hh in households:
-        print(f"\n=== {hh} ===")
-        outcomes[hh] = await run_household(app, hh, answer, transcript, trace=not args.quiet)
+        print(f"\n=== {hh}{' (model turns replayed)' if recording else ''} ===")
+        try:
+            def verify(msgs, shown):
+                return whole_run_difference(msgs, recording["messages"]) or (
+                    gate_difference(shown, recording["shown"]) if shown is not None else None)
+            verify = verify if recording else None
+            outcomes[hh] = await run_household(app, hh, answer, transcript, trace=not args.quiet,
+                                               tokens=True, replayed=bool(recording), verify=verify)
+        except ReplayDiverged as e:
+            print(f"\n{e}\nThe live system no longer matches the recording, so the replay stopped here.",
+                  file=sys.stderr)
+            return 3
         o = outcomes[hh]
         print(f"Outcome: {o['status']}" + (f" ({o.get('reason')})" if o.get("reason") else "")
               + (f", {o['item_id']} by {o['officer']}" if o.get("item_id") else "") + ". Not sent.")
@@ -228,6 +314,21 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--quiet", action="store_true", help="don't print each tool call as it happens")
     d.add_argument("--decide", choices=["ask", "approve", "reject"], default="ask",
                    help="answer the gate interactively (default) or with a fixed decision")
+    d.add_argument("--household", action="append", metavar="HH",
+                   help="run this household instead of the backlog (repeatable), e.g. hh:018")
+    d.add_argument("--replay", metavar="RUN/HH.json",
+                   help="replay a recorded run's model turns; servers, checks and the officer gate run live")
+    d.add_argument("--replay-delay", type=float, default=1.0, metavar="SECONDS",
+                   help="pause before each replayed model turn (default 1.0)")
+    o = sub.add_parser("officer", help="open the officer's review page in a browser")
+    o.add_argument("--district", default="chiredzi", choices=sorted(DISTRICTS))
+    o.add_argument("--replay", metavar="RUN/HH.json",
+                   help="replay this recording's model turns for its household; others run the live model")
+    o.add_argument("--replay-delay", type=float, default=2.0, metavar="SECONDS",
+                   help="pause before each replayed model answer, so the page can be narrated (default 2)")
+    o.add_argument("--model", help="live model, ollama:<model> or anthropic:<model>")
+    o.add_argument("--runs-dir", help="where run transcripts go (default state/runs)")
+    o.add_argument("--port", type=int, default=8765)
     e = sub.add_parser("eval", help="run the eval tasks against the configured model")
     e.add_argument("--task", action="append", help="run only this task (repeatable)")
     e.add_argument("--model", help="ollama:<model> or anthropic:<model> (default from EXTENSION_DESK_MODEL)")
@@ -243,6 +344,9 @@ def main(argv: list[str] | None = None) -> int:
         except ModelUnavailable as err:
             print(f"Can't start the model ({model_spec(args.model)}): {err}", file=sys.stderr)
             return 2
+    if args.command == "officer":
+        from extension_desk.officer.app import main as officer_main
+        return officer_main(args)
     return asyncio.run(demo(args))
 
 

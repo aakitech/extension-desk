@@ -1,0 +1,161 @@
+"""Replay a recorded run's model turns against the live system.
+
+`extension-desk demo --replay <run>/<hh>.json` swaps the model for its own
+recorded answers, in order. Everything else runs live: both MCP servers, the
+data lookups, the citation check, the server's check, the review queue and
+the officer gate. So the server's refusal of a bad draft is computed again on
+the spot, and the officer decides for real.
+
+Before each replayed turn, the live conversation so far is compared with the
+recording. If a tool result or a check's reply differs, the recorded answer
+no longer fits what the model would have seen, so the run stops with
+ReplayDiverged instead of carrying on as if nothing changed.
+"""
+
+import asyncio
+import json
+import time
+from pathlib import Path
+
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import AIMessage, BaseMessage, messages_from_dict
+from langchain_core.outputs import ChatGeneration, ChatResult
+
+from extension_desk.agent.graph import QUEUE_REFUSED, _text
+
+
+class ReplayDiverged(RuntimeError):
+    pass
+
+
+def load_recording(path: Path | str) -> dict:
+    """A household transcript (`<hh>.json` from a run directory), plus the
+    model named in the run's `run.json` when there is one."""
+    path = Path(path)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict) or "household_id" not in data or not data.get("messages"):
+        raise ValueError(f"{path} is not a household transcript (needs household_id and messages)")
+    run = path.parent / "run.json"
+    model = None
+    if run.exists():
+        model = json.loads(run.read_text(encoding="utf-8")).get("model")
+    gate = data.get("gate") or []
+    return {"household_id": data["household_id"], "messages": messages_from_dict(data["messages"]),
+            "shown": gate[0]["shown"] if gate else None, "model": model, "path": path}
+
+
+# Human messages the graph writes are either the review queue's verdict on a
+# draft (evidence: compared) or instructions to the model, like the opening
+# message and the nudge after plain text (not compared, like the system prompt).
+VERDICTS = (QUEUE_REFUSED,)
+
+
+def _same(live: BaseMessage, recorded: BaseMessage) -> bool:
+    if live.type != recorded.type:
+        return False
+    if live.type == "ai":
+        strip = lambda m: [(tc["name"], tc["args"]) for tc in getattr(m, "tool_calls", [])]  # noqa: E731
+        return strip(live) == strip(recorded)
+    if live.type == "human" and not any(_text(m).startswith(VERDICTS) for m in (live, recorded)):
+        return True
+    if live.type == "tool" and getattr(live, "status", "success") != getattr(recorded, "status", "success"):
+        return False
+    return " ".join(_text(live).split()) == " ".join(_text(recorded).split())
+
+
+def first_difference(live: list[BaseMessage], recorded: list[BaseMessage]) -> str | None:
+    """Where the live conversation stops matching the recording, or None.
+    Every tool result and every review-queue verdict must match exactly, and
+    every message must be of the recorded kind. The graph's instructions to
+    the model (system prompt, opening message with today's date, nudges) are
+    not compared: they are instructions, not evidence."""
+    if len(live) >= len(recorded):
+        return f"the live run reached turn {len(live)}, past the end of the recording"
+    for i, (a, b) in enumerate(zip(live, recorded)):
+        if i < 2:
+            continue
+        if not _same(a, b):
+            return (f"message {i} differs: live {a.type} {_text(a)[:120]!r} "
+                    f"vs recorded {b.type} {_text(b)[:120]!r}")
+    if recorded[len(live)].type != "ai":
+        return f"the recording expects a {recorded[len(live)].type} message at {len(live)}, not a model turn"
+    return None
+
+
+def whole_run_difference(live: list[BaseMessage], recorded: list[BaseMessage]) -> str | None:
+    """Where a finished (or gate-paused) live run differs from the whole
+    recording, or None. Checked where the graph stops without asking the model
+    again: if the live server accepted a draft the recording shows refused,
+    the run reaches the officer early, and only this check sees it."""
+    if len(live) != len(recorded):
+        return (f"the live run has {len(live)} messages where the recording has {len(recorded)} "
+                f"(it took a different path, e.g. a verdict changed)")
+    for i, (a, b) in enumerate(zip(live, recorded)):
+        if i >= 2 and not _same(a, b):
+            return (f"message {i} differs: live {a.type} {_text(a)[:120]!r} "
+                    f"vs recorded {b.type} {_text(b)[:120]!r}")
+    return None
+
+
+# What the officer is shown: the queued item and every cited record. Fields
+# made fresh on each run (ID, timestamps, decision) are not compared.
+ITEM_FIELDS = ("kind", "household_id", "status", "payload", "citations", "created_by", "note")
+
+
+def gate_difference(live: dict | None, recorded: dict | None) -> str | None:
+    """Whether what the officer is about to see differs from what the
+    recording's officer saw. The queued item comes back from the server outside
+    the conversation, so the message comparison alone can't see it change."""
+    if recorded is None:
+        return "the recording never reached the officer gate"
+    li, ri = (live or {}).get("item") or {}, recorded.get("item") or {}
+    for f in ITEM_FIELDS:
+        if li.get(f) != ri.get(f):
+            return f"the draft shown to the officer differs in {f!r}: live {li.get(f)!r:.120} vs recorded {ri.get(f)!r:.120}"
+    if (live or {}).get("sources") != recorded.get("sources"):
+        return "the source records shown to the officer differ from the recording"
+    return None
+
+
+class ReplayModel(BaseChatModel):
+    """Answers with the recorded model turns, after checking the live
+    conversation still matches the recording."""
+    recorded: list
+    delay: float = 0.0
+
+    @property
+    def _llm_type(self) -> str:
+        return "replay"
+
+    def bind_tools(self, tools, **kwargs):
+        return self
+
+    def _next(self, messages: list[BaseMessage]) -> ChatResult:
+        problem = first_difference(messages, self.recorded)
+        if problem:
+            raise ReplayDiverged(f"replay stopped: {problem}")
+        rec = self.recorded[len(messages)]
+        msg = AIMessage(content=rec.content, tool_calls=rec.tool_calls,
+                        usage_metadata=rec.usage_metadata, response_metadata=rec.response_metadata)
+        return ChatResult(generations=[ChatGeneration(message=msg)])
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
+        time.sleep(self.delay)
+        return self._next(messages)
+
+    async def _agenerate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
+        await asyncio.sleep(self.delay)
+        return self._next(messages)
+
+
+def token_usage(messages: list[BaseMessage]) -> dict:
+    """Model calls and tokens for one household, from the usage each model
+    reply carries (Ollama's prompt_eval_count and eval_count)."""
+    calls = inp = out = 0
+    for m in messages:
+        usage = getattr(m, "usage_metadata", None) if getattr(m, "type", "") == "ai" else None
+        if usage:
+            calls += 1
+            inp += usage.get("input_tokens", 0)
+            out += usage.get("output_tokens", 0)
+    return {"model_calls": calls, "input_tokens": inp, "output_tokens": out}
