@@ -56,7 +56,8 @@
   .c-plot { background:var(--greensoft); color:var(--green); } .c-pest { background:var(--redsoft); color:var(--red); }
   .c-hh { background:#ece8df; color:var(--ink2); }
   details { margin-top:12px; font-size:17px; color:var(--ink2); }
-  details li { margin:4px 0; }
+  details li { margin:8px 0; }
+  .prov { font-size:14px; color:#6b7670; }
   .sign { display:flex; gap:12px; align-items:center; margin-top:18px; flex-wrap:wrap; }
   .sign input { font: inherit; font-size:20px; padding:10px 14px; border:2px solid var(--green); border-radius:10px; width:300px; }
   .err { color:var(--red); font-weight:600; margin-top:10px; }
@@ -78,7 +79,8 @@
   <section class="work" id="work"><div class="empty">Loading the queue...</div></section>
 </main>
 <script>
-let info = null, selected = null, run = null, poll = null, editing = false, rejecting = false, shown = 0, lastKey = "";
+let info = null, selected = null, run = null, poll = null, editing = false, rejecting = false, shown = 0, lastKey = "", starting = false;
+let officerName = "";
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const band = (d) => d > 180 ? "d-hi" : d > 60 ? "d-mid" : "d-lo";
@@ -87,11 +89,11 @@ const chipClass = (id) => "c-" + (id.split(":")[0] || "hh");
 function sourceText(id, r) {
   if (!r) return `${id}: not found`;
   const k = id.split(":")[0];
-  if (k === "rain") return `Rain ${r.dekad_start} to ${r.dekad_end}: ${r.rain_mm} mm, normal ${r.normal_mm} mm (CHIRPS, real)`;
-  if (k === "price") return `${r.commodity} at ${r.market}, ${r.month}: $${r.price_usd}/kg (FEWS NET, real)`;
-  if (k === "plot") return `${r.crop}, ${r.area_ha} ha, ${r.planted_on ? "planted " + r.planted_on : "not planted yet"} (synthetic)`;
-  if (k === "pest") return `${r.pest} on ${r.crops_affected}, reported ${r.reported_on} (synthetic)`;
-  if (k === "hh") return `${r.members} people, last visit ${r.last_officer_visit} (synthetic)`;
+  if (k === "rain") return `Rain ${r.dekad_start} to ${r.dekad_end}: ${r.rain_mm} mm, normal ${r.normal_mm} mm`;
+  if (k === "price") return `${r.commodity} at ${r.market}, ${r.month}: $${r.price_usd} per ${r.unit || "kg"}`;
+  if (k === "plot") return `${r.crop}, ${r.area_ha} ha, ${r.planted_on ? "planted " + r.planted_on : "not planted yet"}`;
+  if (k === "pest") return `${r.pest} on ${r.crops_affected}, reported ${r.reported_on}`;
+  if (k === "hh") return `${r.members} people, last visit ${r.last_officer_visit}`;
   return id;
 }
 
@@ -118,16 +120,21 @@ function renderList() {
 }
 
 function pick(id) {
-  if (run && (run.state === "running" || run.state === "gate")) return;
+  if (starting || (run && (run.state === "running" || run.state === "gate"))) return;
   selected = id; run = null; shown = 0; editing = rejecting = false; renderList(); render();
 }
 
 async function prepare() {
-  const res = await fetch("/api/run", {method: "POST", headers: {"Content-Type": "application/json"},
-                                       body: JSON.stringify({household: selected})});
-  const body = await res.json();
-  if (!res.ok) { alert(body.error); return; }
-  run = body; shown = 0; editing = rejecting = false; startPoll(); render();
+  if (starting) return;
+  starting = true;
+  try {
+    const res = await fetch("/api/run", {method: "POST", headers: {"Content-Type": "application/json"},
+                                         body: JSON.stringify({household: selected})});
+    const body = await res.json();
+    if (!res.ok) { alert(body.error); return; }
+    run = body; selected = body.household; shown = 0; editing = rejecting = false;
+    renderList(); startPoll(); render();
+  } finally { starting = false; }
 }
 
 function startPoll() {
@@ -150,7 +157,6 @@ async function decide(decision) {
                                                          body: JSON.stringify(body)});
   const r = await res.json();
   if (!res.ok) { $("signerr").textContent = r.error; return; }
-  sessionStorage.setItem("officer", officer);
   run = r; editing = rejecting = false; startPoll(); render();
 }
 
@@ -160,8 +166,9 @@ function gateCard() {
   const lines = recs.map((r, i) => `<div class="line">${editing
       ? `<textarea rows="2">${esc(r.text)}</textarea>` : `<p>${esc(r.text)}</p>`}
       ${r.citations.map(c => `<span class="chip ${chipClass(c)}">${esc(c)}</span>`).join("")}</div>`).join("");
-  const src = Object.entries(sources).map(([id, r]) => `<li><b>${esc(id)}</b>: ${esc(sourceText(id, r))}</li>`).join("");
-  const name = esc(sessionStorage.getItem("officer") || "");
+  const src = Object.entries(sources).map(([id, r]) => `<li><b>${esc(id)}</b>: ${esc(sourceText(id, r))}` +
+    `<div class="prov">Source: ${esc(r ? r.source : "record not found")}</div></li>`).join("");
+  const name = esc(officerName);
   const actions = editing
     ? `<button class="primary" onclick="decide('edit')">Save edits and approve</button><button onclick="editing=false;render()">Cancel</button>`
     : rejecting
@@ -171,7 +178,7 @@ function gateCard() {
     <div style="color:var(--ink2);font-size:16px">${recs.length} line${recs.length === 1 ? "" : "s"} · ${item.citations.length} sources · nothing is sent from here</div>
     ${lines}
     <details><summary>Every source behind this draft (${item.citations.length})</summary><ul>${src}</ul></details>
-    <div class="sign"><input id="officer" placeholder="Your name (required)" value="${name}">${actions}</div>
+    <div class="sign"><input id="officer" placeholder="Your name (required)" value="${name}" oninput="officerName=this.value">${actions}</div>
     <div class="err" id="signerr">${esc(run.gate.error || "")}</div></div>`;
 }
 

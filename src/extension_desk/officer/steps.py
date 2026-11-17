@@ -61,14 +61,18 @@ def found(name: str, text: str) -> str:
         period = data.get("period") or {}
         if data.get("total_mm") is None:
             return "No rainfall records for that period"
+        prelim = ", preliminary" if data.get("includes_preliminary") else ""
         return (f"Rain {period.get('start', '?')} to {period.get('end', '?')}: {data['total_mm']} mm, "
-                f"normal {data.get('normal_mm', '?')} mm (CHIRPS, real)")
+                f"normal {data.get('normal_mm', '?')} mm (CHIRPS{prelim})")
     if name == "get_prices":
         parts = []
         for s in data.get("series") or []:
             latest = s.get("latest") or {}
-            parts.append(f"{s.get('commodity')} at {s.get('market')}: ${latest.get('price_usd')}/kg")
-        return ("; ".join(parts) + " (FEWS NET, real)") if parts else "No price records"
+            srcs = " ".join(str(p.get("source", "")) for p in s.get("points") or [])
+            who = "FEWS NET" if "FEWS NET" in srcs else "WFP" if "WFP" in srcs else "public data"
+            unit = str(s.get("unit") or "USD/kg").replace("USD/", "")
+            parts.append(f"{s.get('commodity')} at {s.get('market')}: ${latest.get('price_usd')}/{unit} ({who})")
+        return "; ".join(parts) if parts else "No price records"
     if name == "get_pest_alerts":
         alerts = data.get("alerts") or []
         if not alerts:

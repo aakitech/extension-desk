@@ -157,6 +157,16 @@ class Desk:
         return run
 
 
+def same_origin(request: Request) -> bool:
+    """A run or decision must come from this page: a JSON request whose
+    Origin, if the browser sends one, is this server. Stops another site open
+    in the same browser, or a plain form post, from starting or signing."""
+    if request.headers.get("content-type", "").split(";")[0].strip() != "application/json":
+        return False
+    origin = request.headers.get("origin")
+    return origin is None or origin.split("://", 1)[-1] == request.headers.get("host")
+
+
 def create_app(desk: Desk) -> Starlette:
     @contextlib.asynccontextmanager
     async def lifespan(_app):
@@ -172,6 +182,8 @@ def create_app(desk: Desk) -> Starlette:
                              "current": desk.current and desk.current.view()})
 
     async def begin(request: Request):
+        if not same_origin(request):
+            return JSONResponse({"error": "requests must come from this page"}, status_code=403)
         body = await request.json()
         try:
             run = desk.begin(str(body.get("household", "")))
@@ -184,6 +196,8 @@ def create_app(desk: Desk) -> Starlette:
         return JSONResponse(run.view()) if run else JSONResponse({"error": "no such run"}, status_code=404)
 
     async def decide(request: Request):
+        if not same_origin(request):
+            return JSONResponse({"error": "requests must come from this page"}, status_code=403)
         try:
             run = desk.decide(request.path_params["run_id"], await request.json())
         except (RuntimeError, ValueError) as e:
@@ -209,10 +223,11 @@ def main(args) -> int:
             print(f"Can't load the recording: {e!r}", file=sys.stderr)
             return 2
     desk = Desk(args.district, recording, args.model, args.replay_delay, args.runs_dir)
-    url = f"http://{args.host}:{args.port}"
+    url = f"http://127.0.0.1:{args.port}"
     print(f"Officer review page: {url}  (Ctrl+C to stop). Nothing is sent to any household.")
     if recording:
         print(f"{recording['household_id']} replays the model's answers from {recording['path'].parent.name}; "
               "every other household runs the live model.")
-    uvicorn.run(create_app(desk), host=args.host, port=args.port, log_level="warning")
+    # Loopback only: whoever uses this page signs decisions, so other machines must not reach it.
+    uvicorn.run(create_app(desk), host="127.0.0.1", port=args.port, log_level="warning")
     return 0

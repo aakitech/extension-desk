@@ -328,7 +328,6 @@ def main(argv: list[str] | None = None) -> int:
                    help="pause before each replayed model answer, so the page can be narrated (default 2)")
     o.add_argument("--model", help="live model, ollama:<model> or anthropic:<model>")
     o.add_argument("--runs-dir", help="where run transcripts go (default state/runs)")
-    o.add_argument("--host", default="127.0.0.1")
     o.add_argument("--port", type=int, default=8765)
     e = sub.add_parser("eval", help="run the eval tasks against the configured model")
     e.add_argument("--task", action="append", help="run only this task (repeatable)")
