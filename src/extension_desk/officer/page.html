@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Extension Desk - Review queue</title>
+<style>
+  :root { --bg:#f6f2e9; --surface:#fff; --ink:#14211b; --ink2:#3c4b43; --rule:#d8d1c3; --green:#1f6e4a; --greensoft:#dcebdf;
+          --red:#c0391b; --redsoft:#f8ddd4; --amber:#9a6a0c; --ambersoft:#f6ead0; --blue:#1f5a8a; --bluesoft:#dceaf5; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font: 18px/1.4 "Segoe UI", system-ui, sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+  header { background:var(--green); color:#fff; display:flex; align-items:center; gap:16px; padding:14px 28px; }
+  header b { font-size:24px; }
+  header .sub { opacity:.85; font-size:18px; }
+  header .date { margin-left:auto; opacity:.9; }
+  .notice { background:var(--ambersoft); color:var(--amber); padding:8px 28px; font-size:16px; font-weight:600; display:none; }
+  main { flex:1; min-height:0; display:grid; grid-template-columns: 300px 1fr; }
+  aside { background:#efe9dc; border-right:2px solid var(--rule); padding:18px 14px; overflow:auto; }
+  aside h2 { font-size:14px; letter-spacing:1.5px; text-transform:uppercase; color:var(--ink2); margin:4px 6px 12px; }
+  .hh { display:flex; justify-content:space-between; align-items:center; background:var(--surface); border:2px solid transparent;
+        border-radius:12px; padding:10px 14px; margin-bottom:8px; cursor:pointer; }
+  .hh:hover { border-color:var(--rule); }
+  .hh.sel { border-color:var(--green); background:var(--greensoft); }
+  .hh .id { font-family: Consolas, monospace; font-weight:700; font-size:18px; }
+  .hh .crops { font-size:14px; color:var(--ink2); }
+  .hh .days { font-weight:800; font-size:18px; }
+  .d-hi { color:var(--red); } .d-mid { color:#c98a12; } .d-lo { color:var(--green); }
+  section.work { padding:24px 34px 60px; overflow:auto; }
+  section.work > * { max-width:1100px; }
+  .hhhead { display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+  .hhhead h1 { margin:0; font-size:34px; }
+  .hhhead .meta { color:var(--ink2); font-size:20px; }
+  button { font: inherit; font-weight:700; border-radius:12px; padding:12px 26px; border:2px solid var(--rule); background:var(--surface); cursor:pointer; }
+  button.primary { background:var(--green); color:#fff; border-color:var(--green); }
+  button.danger { color:var(--red); border-color:var(--red); }
+  button:disabled { opacity:.45; cursor:default; }
+  .steps { margin-top:18px; display:flex; flex-direction:column; gap:4px; }
+  .step { display:flex; gap:14px; align-items:flex-start; font-size:20px; padding:5px 14px; border-radius:10px; }
+  .step.new { animation: in .35s ease-out; }
+  .step i { flex:none; width:14px; height:14px; border-radius:50%; margin-top:8px; }
+  .step.ask i { background:var(--blue); } .step.ask { color:var(--ink2); }
+  .step.data i { background:var(--green); }
+  .step.ok i { background:var(--green); } .step.ok { color:var(--green); font-weight:600; }
+  .step.bad { background:var(--redsoft); color:var(--red); font-weight:700; } .step.bad i { background:var(--red); }
+  .step.gate { color:var(--amber); font-weight:700; } .step.gate i { background:#c98a12; }
+  .step.meta { color:#7a857f; font-size:17px; } .step.meta i { background:#b9b1a0; width:10px; height:10px; }
+  @keyframes in { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform:none; } }
+  .card { margin-top:24px; background:var(--surface); border:3px solid var(--green); border-radius:18px; padding:22px 26px; box-shadow:0 14px 34px rgba(20,33,27,.10); }
+  .card h3 { margin:0 0 4px; font-size:24px; display:flex; justify-content:space-between; }
+  .card h3 span { font-size:16px; color:var(--amber); border:2px solid #c98a12; border-radius:999px; padding:2px 12px; }
+  .line { padding:14px 0; border-bottom:1px dashed var(--rule); }
+  .line p { margin:0 0 8px; font-size:22px; }
+  .line textarea { width:100%; font: inherit; font-size:20px; padding:8px; border-radius:8px; border:2px solid var(--green); }
+  .chip { display:inline-block; font-family: Consolas, monospace; font-size:15px; font-weight:600; padding:3px 9px; border-radius:7px; margin:0 6px 4px 0; }
+  .c-rain { background:var(--bluesoft); color:var(--blue); } .c-price { background:var(--ambersoft); color:var(--amber); }
+  .c-plot { background:var(--greensoft); color:var(--green); } .c-pest { background:var(--redsoft); color:var(--red); }
+  .c-hh { background:#ece8df; color:var(--ink2); }
+  details { margin-top:12px; font-size:17px; color:var(--ink2); }
+  details li { margin:4px 0; }
+  .sign { display:flex; gap:12px; align-items:center; margin-top:18px; flex-wrap:wrap; }
+  .sign input { font: inherit; font-size:20px; padding:10px 14px; border:2px solid var(--green); border-radius:10px; width:300px; }
+  .err { color:var(--red); font-weight:600; margin-top:10px; }
+  .done { margin-top:24px; background:var(--green); color:#fff; border-radius:14px; padding:18px 22px; font-size:22px; font-weight:700; }
+  .done.rej { background:var(--ink); }
+  .done small { display:block; font-weight:400; font-size:17px; opacity:.9; margin-top:6px; }
+  .fail { margin-top:24px; background:var(--redsoft); color:var(--red); border:2px solid var(--red); border-radius:14px; padding:16px 20px; font-size:19px; font-weight:600; }
+  .empty { color:var(--ink2); font-size:22px; margin-top:40px; }
+</style>
+</head>
+<body>
+<header>
+  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+  <b>Extension Desk</b><span class="sub" id="sub">Review queue</span><span class="date" id="date"></span>
+</header>
+<div class="notice" id="notice"></div>
+<main>
+  <aside><h2>Waiting longest</h2><div id="list"></div></aside>
+  <section class="work" id="work"><div class="empty">Loading the queue...</div></section>
+</main>
+<script>
+let info = null, selected = null, run = null, poll = null, editing = false, rejecting = false, shown = 0, lastKey = "";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const band = (d) => d > 180 ? "d-hi" : d > 60 ? "d-mid" : "d-lo";
+const chipClass = (id) => "c-" + (id.split(":")[0] || "hh");
+
+function sourceText(id, r) {
+  if (!r) return `${id}: not found`;
+  const k = id.split(":")[0];
+  if (k === "rain") return `Rain ${r.dekad_start} to ${r.dekad_end}: ${r.rain_mm} mm, normal ${r.normal_mm} mm (CHIRPS, real)`;
+  if (k === "price") return `${r.commodity} at ${r.market}, ${r.month}: $${r.price_usd}/kg (FEWS NET, real)`;
+  if (k === "plot") return `${r.crop}, ${r.area_ha} ha, ${r.planted_on ? "planted " + r.planted_on : "not planted yet"} (synthetic)`;
+  if (k === "pest") return `${r.pest} on ${r.crops_affected}, reported ${r.reported_on} (synthetic)`;
+  if (k === "hh") return `${r.members} people, last visit ${r.last_officer_visit} (synthetic)`;
+  return id;
+}
+
+async function load() {
+  info = await (await fetch("/api/info")).json();
+  $("sub").textContent = `Review queue · ${info.district[0].toUpperCase() + info.district.slice(1)}`;
+  $("date").textContent = info.today ? new Date(info.today).toDateString() : "";
+  const replayHh = info.households.find(h => h.replay);
+  if (replayHh) {
+    $("notice").style.display = "block";
+    $("notice").textContent = `${replayHh.id}: the model's answers are replayed from our recorded run of 12 Oct. ` +
+      `Our MCP server, both checks and your sign-off run live. Every other household runs the live model.`;
+  }
+  if (info.current) { run = info.current; selected = run.household; startPoll(); }
+  else selected = (replayHh || info.households[0]).id;
+  renderList(); render();
+}
+
+function renderList() {
+  $("list").innerHTML = info.households.map(h => `
+    <div class="hh ${h.id === selected ? "sel" : ""}" onclick="pick('${h.id}')">
+      <div><div class="id">${h.id}</div><div class="crops">${esc(h.crops.join(", "))}</div></div>
+      <div class="days ${band(h.days)}">${h.days}d</div></div>`).join("");
+}
+
+function pick(id) {
+  if (run && (run.state === "running" || run.state === "gate")) return;
+  selected = id; run = null; shown = 0; editing = rejecting = false; renderList(); render();
+}
+
+async function prepare() {
+  const res = await fetch("/api/run", {method: "POST", headers: {"Content-Type": "application/json"},
+                                       body: JSON.stringify({household: selected})});
+  const body = await res.json();
+  if (!res.ok) { alert(body.error); return; }
+  run = body; shown = 0; editing = rejecting = false; startPoll(); render();
+}
+
+function startPoll() {
+  clearInterval(poll);
+  poll = setInterval(async () => {
+    const r = await (await fetch(`/api/run/${run.id}`)).json();
+    const changed = JSON.stringify(r) !== JSON.stringify(run);
+    run = r;
+    if (changed) render();
+    if (!["running", "gate"].includes(run.state)) clearInterval(poll);
+  }, 350);
+}
+
+async function decide(decision) {
+  const officer = $("officer").value.trim();
+  const body = {decision, officer};
+  if (decision === "edit") body.edits = [...document.querySelectorAll(".line textarea")].map(t => t.value);
+  if (decision === "reject") body.note = ($("note") || {}).value || "";
+  const res = await fetch(`/api/run/${run.id}/decide`, {method: "POST", headers: {"Content-Type": "application/json"},
+                                                         body: JSON.stringify(body)});
+  const r = await res.json();
+  if (!res.ok) { $("signerr").textContent = r.error; return; }
+  sessionStorage.setItem("officer", officer);
+  run = r; editing = rejecting = false; startPoll(); render();
+}
+
+function gateCard() {
+  const item = run.gate.item, sources = run.gate.sources || {};
+  const recs = item.payload.recommendations;
+  const lines = recs.map((r, i) => `<div class="line">${editing
+      ? `<textarea rows="2">${esc(r.text)}</textarea>` : `<p>${esc(r.text)}</p>`}
+      ${r.citations.map(c => `<span class="chip ${chipClass(c)}">${esc(c)}</span>`).join("")}</div>`).join("");
+  const src = Object.entries(sources).map(([id, r]) => `<li><b>${esc(id)}</b>: ${esc(sourceText(id, r))}</li>`).join("");
+  const name = esc(sessionStorage.getItem("officer") || "");
+  const actions = editing
+    ? `<button class="primary" onclick="decide('edit')">Save edits and approve</button><button onclick="editing=false;render()">Cancel</button>`
+    : rejecting
+    ? `<input id="note" placeholder="Reason (optional)"><button class="danger" onclick="decide('reject')">Reject draft</button><button onclick="rejecting=false;render()">Cancel</button>`
+    : `<button class="primary" onclick="decide('approve')">Approve</button><button onclick="editing=true;render()">Edit</button><button class="danger" onclick="rejecting=true;render()">Reject</button>`;
+  return `<div class="card"><h3>Draft for ${esc(item.household_id)} <span>Awaiting officer</span></h3>
+    <div style="color:var(--ink2);font-size:16px">${recs.length} line${recs.length === 1 ? "" : "s"} · ${item.citations.length} sources · nothing is sent from here</div>
+    ${lines}
+    <details><summary>Every source behind this draft (${item.citations.length})</summary><ul>${src}</ul></details>
+    <div class="sign"><input id="officer" placeholder="Your name (required)" value="${name}">${actions}</div>
+    <div class="err" id="signerr">${esc(run.gate.error || "")}</div></div>`;
+}
+
+function render() {
+  if (!info) return;
+  const h = info.households.find(x => x.id === selected);
+  const busy = run && ["running", "gate"].includes(run.state);
+  let html = `<div class="hhhead"><h1>${h.id}</h1>
+    <span class="meta">${h.members} people · ${esc(h.crops.join(", "))} · <b class="${band(h.days)}">${h.days} days</b> since a visit</span>
+    ${busy ? "" : `<button class="primary" id="prepare" onclick="prepare()">${run && run.household === h.id ? "Run again" : "Prepare draft"}</button>`}</div>`;
+  if (!run || run.household !== h.id) { $("work").innerHTML = html; return; }
+  html += `<div class="steps">${run.steps.map((s, i) => `<div class="step ${s.kind}${i >= shown ? " new" : ""}"><i></i><span>${esc(s.text)}</span></div>`).join("")}
+    ${run.state === "running" ? `<div class="step meta"><i></i><span>Working...</span></div>` : ""}</div>`;
+  if (run.state === "gate") html += gateCard();
+  const t = run.tokens, tok = t.model_calls
+    ? `${t.model_calls} model calls · ${(t.input_tokens + t.output_tokens).toLocaleString()} tokens${run.replayed ? " (as logged in the recorded run)" : ""}` : "";
+  if (run.state === "done" && run.outcome) {
+    const o = run.outcome;
+    if (o.status === "approved" || o.status === "rejected") {
+      const verb = o.decision === "edit" ? "Edited and approved" : o.status === "approved" ? "Approved" : "Rejected";
+      html += `<div class="done ${o.status === "rejected" ? "rej" : ""}">${verb} by ${esc(o.officer)} · saved with its audit record · not sent
+        <small>${tok}</small></div>`;
+    } else {
+      html += `<div class="fail">No draft for the officer: ${esc(o.reason || o.status)}<br><small>${tok}</small></div>`;
+    }
+  }
+  if (run.state === "diverged" || run.state === "error") html += `<div class="fail">${esc(run.error)}</div>`;
+  $("work").innerHTML = html;
+  const key = `${run.id}:${run.steps.length}:${run.state}`;
+  if (key !== lastKey) { lastKey = key; $("work").scrollTo({top: $("work").scrollHeight, behavior: "smooth"}); }
+  shown = run.steps.length;
+}
+load();
+</script>
+</body>
+</html>

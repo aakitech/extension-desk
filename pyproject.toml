@@ -12,6 +12,8 @@ dependencies = [
     "pydantic>=2",
     "langchain-ollama>=1.1.0",
     "mcp-server-time==2026.8.18",
+    "starlette",
+    "uvicorn",
 ]
 
 [project.scripts]

@@ -7,6 +7,7 @@ sent to any household; approved drafts wait in the review queue.
 
 import argparse
 import asyncio
+import inspect
 import json
 import os
 import sys
@@ -156,11 +157,13 @@ def token_line(usage: dict, replayed: bool = False) -> str:
 
 async def run_household(app, household_id: str, answer, transcript: Transcript | None = None,
                         trace: bool = False, tokens: bool = False, replayed: bool = False,
-                        verify=None) -> dict:
+                        verify=None, on_update=None) -> dict:
     """`verify(messages, shown)` returns a problem or None. It runs before
     the officer is asked anything (with what the officer would be shown) and
     when the run ends (shown=None); a problem stops the run with
-    ReplayDiverged. The transcript is written either way."""
+    ReplayDiverged. The transcript is written either way.
+    `on_update(node, update)` sees every graph step (the officer page uses it);
+    `answer` may be a coroutine function (the page awaits the officer's click)."""
     # A new thread per run: nothing from an earlier run of this household carries over.
     config = {"configurable": {"thread_id": f"{household_id}:{uuid.uuid4()}"}}
     started, gate = time.monotonic(), []
@@ -173,7 +176,10 @@ async def run_household(app, household_id: str, answer, transcript: Transcript |
                 for node, update in chunk.items():
                     if node == "__interrupt__":
                         pause = update[0].value
-                    elif trace:
+                        continue
+                    if on_update:
+                        on_update(node, update)
+                    if trace:
                         for line in trace_update(node, update):
                             print(line, flush=True)
         except ReplayDiverged as e:  # raised by the replayed model before a turn
@@ -187,6 +193,8 @@ async def run_household(app, household_id: str, answer, transcript: Transcript |
         if trace:
             print("  officer gate: paused for the officer", flush=True)
         reply = answer(pause)
+        if inspect.isawaitable(reply):
+            reply = await reply
         gate.append({"shown": pause, "answer": reply})
         step = Command(resume=reply)
     result = dict((await app.aget_state(config)).values)
@@ -312,6 +320,16 @@ def main(argv: list[str] | None = None) -> int:
                    help="replay a recorded run's model turns; servers, checks and the officer gate run live")
     d.add_argument("--replay-delay", type=float, default=1.0, metavar="SECONDS",
                    help="pause before each replayed model turn (default 1.0)")
+    o = sub.add_parser("officer", help="open the officer's review page in a browser")
+    o.add_argument("--district", default="chiredzi", choices=sorted(DISTRICTS))
+    o.add_argument("--replay", metavar="RUN/HH.json",
+                   help="replay this recording's model turns for its household; others run the live model")
+    o.add_argument("--replay-delay", type=float, default=2.0, metavar="SECONDS",
+                   help="pause before each replayed model answer, so the page can be narrated (default 2)")
+    o.add_argument("--model", help="live model, ollama:<model> or anthropic:<model>")
+    o.add_argument("--runs-dir", help="where run transcripts go (default state/runs)")
+    o.add_argument("--host", default="127.0.0.1")
+    o.add_argument("--port", type=int, default=8765)
     e = sub.add_parser("eval", help="run the eval tasks against the configured model")
     e.add_argument("--task", action="append", help="run only this task (repeatable)")
     e.add_argument("--model", help="ollama:<model> or anthropic:<model> (default from EXTENSION_DESK_MODEL)")
@@ -327,6 +345,9 @@ def main(argv: list[str] | None = None) -> int:
         except ModelUnavailable as err:
             print(f"Can't start the model ({model_spec(args.model)}): {err}", file=sys.stderr)
             return 2
+    if args.command == "officer":
+        from extension_desk.officer.app import main as officer_main
+        return officer_main(args)
     return asyncio.run(demo(args))
 
 

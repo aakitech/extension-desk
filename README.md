@@ -48,6 +48,15 @@ Before you run it:
 
 Options: `--quiet`, `--district mangwe`, `--limit N`, `--household hh:018` (run named households instead of the backlog), `--officer NAME`, `--decide approve|reject` (non-interactive), `--model anthropic:<model>` (hosted; run `uv sync --extra hosted` and set `ANTHROPIC_API_KEY`). After each household the demo prints the model calls and tokens it used, read from the model's own usage reports.
 
+### The officer's review page
+
+```bash
+uv run extension-desk officer                     # live model for every household (needs Ollama)
+uv run extension-desk officer --replay evals/runs/20261012T215559Z-qwen2.5-7b/hh_018.json
+```
+
+Opens a local page at http://127.0.0.1:8765: the district's households, longest wait first. Pick one and click **Prepare draft** to watch the agent gather evidence and draft, step by step in plain English, including any refusal by the checks. Then review the draft and every source behind it, and approve, edit or reject it under your own name. Same agent, MCP servers, checks, review queue and audit log as the terminal demo, and nothing is sent to any household. With `--replay`, the recording's household replays the model's answers (the page says so); every other household runs the live model.
+
 ### Replaying a recorded run
 
 ```bash

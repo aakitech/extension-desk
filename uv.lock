@@ -428,6 +428,8 @@ dependencies = [
     { name = "mcp" },
     { name = "mcp-server-time" },
     { name = "pydantic" },
+    { name = "starlette" },
+    { name = "uvicorn" },
 ]
 
 [package.optional-dependencies]
@@ -449,6 +451,8 @@ requires-dist = [
     { name = "mcp" },
     { name = "mcp-server-time", specifier = "==2026.8.18" },
     { name = "pydantic", specifier = ">=2" },
+    { name = "starlette" },
+    { name = "uvicorn" },
 ]
 provides-extras = ["hosted"]
 
