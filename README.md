@@ -17,6 +17,16 @@ Built for the [Agentic AI for Africa Innovation Challenge](https://agentic-afric
 
 Agricultural extension officers, who advise far more smallholder households than they can visit, and the households they serve. The pilot districts are Chiredzi (Masvingo) and Mangwe (Matabeleland South) in Zimbabwe, where rain-fed maize and sorghum farming makes the start-of-season decisions the costly ones.
 
+## From the field to the farmer
+
+What's built and what isn't, in the order the information travels.
+
+1. **Records come in.** Rainfall (CHIRPS) and market prices (FEWS NET, WFP) are real public data, refreshed by script. Household, plot and pest-alert records are synthetic in this repo; in a pilot they would come from the extension office's own registers and officers' field reports. *Built: the public data. Not built: a live feed from field reports.*
+2. **The agent drafts, one household at a time.** It gets today's date from the time server, then asks our MCP server for that household's plots, the district's rainfall and pest alerts, and prices for the crops grown. It drafts advice where every line cites the records it relies on. *Built.*
+3. **Two checks.** Every cited record must have come back in this run (check 1, in the agent), and must be about this household or its district, with pest alerts only for crops it grows (check 2, in the MCP server). A draft that fails gets one retry, then is dropped and logged. *Built.*
+4. **The officer decides.** The draft waits in the review queue until a named officer approves, edits or rejects it, with every source shown. The decision and its audit entry are written together. *Built: the officer page and the terminal demo.*
+5. **Advice reaches the household.** Today the officer delivers approved advice the way they already do: a visit, a call, or a message from their own phone. *Not built: sending approved advice by WhatsApp, or by SMS for households without a smartphone, from the officer's account and only after approval.* The agent itself will never have a send tool.
+
 ## Architecture
 
 ![Extension Desk architecture](docs/architecture.png)
@@ -31,7 +41,7 @@ Agricultural extension officers, who advise far more smallholder households than
 
 More detail is in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-**Stack:** Python 3.11+, uv, LangGraph, LangChain, langchain-mcp-adapters, the official MCP Python SDK (FastMCP), mcp-server-time, Ollama, Pydantic, SQLite, pytest (`uv run pytest`, 138 tests) and GitHub Actions CI.
+**Stack:** Python 3.11+, uv, LangGraph, LangChain, langchain-mcp-adapters, the official MCP Python SDK (FastMCP), mcp-server-time, Ollama, Pydantic, SQLite, pytest (`uv run pytest`, 164 tests) and GitHub Actions CI.
 
 ## Run it
 
@@ -82,14 +92,15 @@ Each task runs the real agent and MCP servers, often on a modified copy of the d
 - **The citation checks prove relevance, not support.** They prove a cited record is about the household. They don't prove the advice follows from that record.
 - **Small-model errors.** On `qwen2.5:7b` the agent scores 6 to 8 of 11 evals across its last four runs, and sometimes resubmits a citation that was already refused.
 - **No hosted-model comparison yet** (#14).
-- **Pilot scope.** Two districts, one rainfall pixel per district, some proxy markets, and synthetic households. The officer interface is a terminal program.
+- **Pilot scope.** Two districts, one rainfall pixel per district, some proxy markets, and synthetic households. The officer page runs on one machine for one officer, with no logins.
 
 ## Future improvements
 
 - Screen and mark untrusted text in data fields, and check key terms against the cited record (the next steps for the injection failure).
 - Strip refused citations before a retry, so a usable draft isn't lost.
 - Run the hosted-model comparison.
-- Build an officer-friendly interface, and pilot with real extension offices under proper data consent.
+- Send approved advice by WhatsApp or SMS from the officer's account, after approval, and feed officers' field reports into the records the agent reads.
+- Pilot with real extension offices under proper data consent.
 
 ## Data
 
